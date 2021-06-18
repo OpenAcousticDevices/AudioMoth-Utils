@@ -215,7 +215,7 @@ function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, 
 
 function expand (inputPath, outputPath, prefix, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, callback) {
 
-    var i, j, fi, fileSize, header, headerCheck, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
+    var i, j, fi, type, inputBytes, outputBytes, fileSize, header, headerCheck, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
 
     /* Check parameter */
 
@@ -431,15 +431,15 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
             inputFileBytesRead += numberOfBytes;
 
-            /* If bytes read is less than encode block size it may be silent or audio data */
+            /* Update the details of the next file summary element */
 
             if (numberOfBytes < ENCODED_BLOCK_SIZE_IN_BYTES) {
 
-                fileSummary.push({
-                    type: isFullOfZeros(fileBuffer, numberOfBytes) ? 'SILENT' : 'AUDIO',
-                    inputBytes: numberOfBytes,
-                    outputBytes: numberOfBytes
-                });
+                /* If bytes read is less than encode block size it may be silent or audio data */
+
+                type = isFullOfZeros(fileBuffer, numberOfBytes) ? 'SILENT' : 'AUDIO';
+                inputBytes = numberOfBytes;
+                outputBytes = numberOfBytes;
 
             } else {
 
@@ -451,23 +451,38 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
                     /* Add the silent period */
 
-                    fileSummary.push({
-                        type: 'SILENT',
-                        inputBytes: ENCODED_BLOCK_SIZE_IN_BYTES,
-                        outputBytes: numberOfBlocks * ENCODED_BLOCK_SIZE_IN_BYTES
-                    });
+                    type = 'SILENT';
+                    inputBytes = ENCODED_BLOCK_SIZE_IN_BYTES;
+                    outputBytes = numberOfBlocks * ENCODED_BLOCK_SIZE_IN_BYTES;
 
                 } else {
 
                     /* Add audio block */
 
-                    fileSummary.push({
-                        type: isFullOfZeros(fileBuffer, ENCODED_BLOCK_SIZE_IN_BYTES) ? 'SILENT' : 'AUDIO',
-                        inputBytes: ENCODED_BLOCK_SIZE_IN_BYTES,
-                        outputBytes: ENCODED_BLOCK_SIZE_IN_BYTES
-                    });
+                    type = isFullOfZeros(fileBuffer, ENCODED_BLOCK_SIZE_IN_BYTES) ? 'SILENT' : 'AUDIO';
+                    inputBytes = ENCODED_BLOCK_SIZE_IN_BYTES;
+                    outputBytes = ENCODED_BLOCK_SIZE_IN_BYTES;
 
                 }
+
+            }
+
+            if (fileSummary.length === 0 || type !== fileSummary[fileSummary.length - 1].type) {
+
+                /* Add new block */
+
+                fileSummary.push({
+                    type: type,
+                    inputBytes: inputBytes,
+                    outputBytes: outputBytes
+                });
+
+            } else {
+
+                /* Append to existing block */
+
+                fileSummary[fileSummary.length - 1].inputBytes += inputBytes;
+                fileSummary[fileSummary.length - 1].outputBytes += outputBytes;
 
             }
 
@@ -479,38 +494,6 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
             success: false,
             error: 'Error occurred while processing input file. ' + e
         };
-
-    }
-
-    /* Prune the file summary */
-
-    i = 0;
-
-    while (i < fileSummary.length) {
-
-        totalOutputBytes += fileSummary[i].outputBytes;
-
-        if (fileSummary[i].inputBytes === 0) {
-
-            fileSummary.splice(i, 1);
-
-            continue;
-
-        }
-
-        if (i < fileSummary.length - 1 && fileSummary[i].type === fileSummary[i + 1].type) {
-
-            fileSummary[i + 1].inputBytes += fileSummary[i].inputBytes;
-
-            fileSummary[i + 1].outputBytes += fileSummary[i].outputBytes;
-
-            fileSummary.splice(i, 1);
-
-            continue;
-
-        }
-
-        i += 1;
 
     }
 
