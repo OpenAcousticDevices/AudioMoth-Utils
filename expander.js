@@ -129,7 +129,7 @@ function formatFilename (timestamp, milliseconds) {
 
 /* Write the output file */
 
-function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, length) {
+function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, length, callback) {
 
     if (DEBUG) {
 
@@ -203,6 +203,10 @@ function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, 
 
         if (index === fileSummary[i].outputOffset + fileSummary[i].outputBytes) i += 1;
 
+        /* Callback with progress */
+
+        if (callback) callback((index - offset) / length);
+
     }
 
     /* Close the output file */
@@ -215,7 +219,7 @@ function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, 
 
 function expand (inputPath, outputPath, prefix, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, callback) {
 
-    var i, j, fi, type, inputBytes, outputBytes, fileSize, header, headerCheck, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
+    var i, j, fi, type, inputBytes, outputBytes, fileSize, header, headerCheck, progress, nextProgress, outputCallback, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
 
     /* Check parameter */
 
@@ -391,6 +395,8 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
     /* Read the input file to generate summary data */
 
+    progress = 0;
+
     fileSummary = [];
 
     inputFileBytesRead = 0;
@@ -483,6 +489,18 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
                 fileSummary[fileSummary.length - 1].inputBytes += inputBytes;
                 fileSummary[fileSummary.length - 1].outputBytes += outputBytes;
+
+            }
+
+            /* Update the progress callback */
+
+            nextProgress = Math.round(50 * inputFileBytesRead / inputFileDataSize);
+
+            if (nextProgress != progress) {
+
+                progress = nextProgress;
+
+                if (callback) callback(progress);
 
             }
 
@@ -693,19 +711,45 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
             filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp, false);
 
-            writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, comment, 0, totalOutputBytes);
+            outputCallback = function(value) {
+
+                nextProgress = 50 + Math.round(50 * value);
+
+                if (nextProgress > progress) {
+
+                    progress = nextProgress;
+    
+                    if (callback) callback(progress);
+    
+                }
+    
+            }
+
+            writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, comment, 0, totalOutputBytes, outputCallback);
 
         } else {
 
             for (i = 0; i < outputFileList.length; i += 1) {
 
-                if (i > 0) callback(Math.round(i / outputFileList.length * 100));
-
                 comment = 'Expanded from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
 
                 filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp, outputFileList[i].milliseconds);
 
-                writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, comment, outputFileList[i].offset, outputFileList[i].length);
+                outputCallback = function(value) {
+
+                    nextProgress = 50 + Math.round(50 * (i + value) / outputFileList.length);
+    
+                    if (nextProgress > progress) {
+    
+                        progress = nextProgress;
+        
+                        if (callback) callback(progress);
+        
+                    }
+        
+                }
+
+                writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, comment, outputFileList[i].offset, outputFileList[i].length, outputCallback);
 
             }
 
@@ -720,7 +764,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
     }
 
-    callback(100);
+    if (callback && progress < 100) callback(100);
 
     /* Close the input file */
 

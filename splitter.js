@@ -63,7 +63,7 @@ function formatFilename (timestamp) {
 
 /* Write the output file */
 
-function writeOutputFile (fi, outputPath, header, comment, offset, length) {
+function writeOutputFile (fi, outputPath, header, comment, offset, length, callback) {
 
     if (DEBUG) {
 
@@ -113,6 +113,10 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length) {
 
         index += numberOfBytes;
 
+        /* Callback with progress */
+
+        if (callback) callback((index - offset) / length);
+
     }
 
     /* Close the output file */
@@ -125,7 +129,7 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length) {
 
 function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
-    var i, fi, fileSize, header, headerCheck, inputFileDataSize, regex, filename, comment, timestamp, originalTimestamp, outputFileList, numberOfBytes, numberOfBytesProcessed;
+    var i, fi, fileSize, header, headerCheck, progress, nextProgress, outputCallback, inputFileDataSize, regex, filename, comment, timestamp, originalTimestamp, outputFileList, numberOfBytes, numberOfBytesProcessed;
 
     /* Check parameter */
 
@@ -315,6 +319,8 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     /* Write the output files */
 
+    progress = 0;
+
     try {
 
         if (outputFileList.length === 1 && outputFileList[0].offset === 0 && outputFileList[0].length === inputFileDataSize) {
@@ -323,7 +329,21 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
             filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp, false);
 
-            writeOutputFile(fi, path.join(outputPath, filename), header, comment, 0, inputFileDataSize);
+            outputCallback = function(value) {
+
+                nextProgress = Math.round(100 * value);
+
+                if (nextProgress > progress) {
+
+                    progress = nextProgress;
+    
+                    if (callback) callback(progress);
+    
+                }
+    
+            }
+
+            writeOutputFile(fi, path.join(outputPath, filename), header, comment, 0, inputFileDataSize, outputCallback);
 
         } else {
 
@@ -335,7 +355,21 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
                 filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp, outputFileList[i].milliseconds);
 
-                writeOutputFile(fi, path.join(outputPath, filename), header, comment, outputFileList[i].offset, outputFileList[i].length);
+                outputCallback = function(value) {
+
+                    nextProgress = Math.round(100 * (i + value) / outputFileList.length);
+    
+                    if (nextProgress > progress) {
+    
+                        progress = nextProgress;
+        
+                        if (callback) callback(progress);
+        
+                    }
+        
+                }
+
+                writeOutputFile(fi, path.join(outputPath, filename), header, comment, outputFileList[i].offset, outputFileList[i].length, outputCallback);
 
             }
 
@@ -350,7 +384,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     }
 
-    callback(100);
+    if (callback && progress < 100) callback(100);
 
     /* Close the input file */
 
