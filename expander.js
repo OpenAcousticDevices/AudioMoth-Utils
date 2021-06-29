@@ -17,6 +17,8 @@ const DEBUG = false;
 
 /* Expansion constants */
 
+const AUDIOMOTH_SEGMENT_SIZE = 32 * 1024;
+
 const ENCODED_BLOCK_SIZE_IN_BYTES = 512;
 
 const NUMBER_OF_BYTES_IN_SAMPLE = 2;
@@ -219,7 +221,7 @@ function writeOutputFile (fi, fileSummary, outputPath, header, comment, offset, 
 
 function expand (inputPath, outputPath, prefix, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, callback) {
 
-    var i, j, fi, type, inputBytes, outputBytes, fileSize, header, headerCheck, progress, nextProgress, outputCallback, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
+    var i, j, fi, type, firstSegment, lastSegment, inputBytes, outputBytes, fileSize, header, headerCheck, progress, nextProgress, outputCallback, inputFileDataSize, regex, filename, comment, hasAudio, numberOfBlocks, fileSummary, timestamp, originalTimestamp, outputFileList, timeOffset, numberOfBytes, numberOfBytesRead, numberOfBytesProcessed, inputFileBytesRead, totalInputBytes, totalOutputBytes;
 
     /* Check parameter */
 
@@ -427,6 +429,12 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
         while (inputFileBytesRead < inputFileDataSize) {
 
+            /* Check if this is the first or last segment */
+
+            firstSegment = inputFileBytesRead + header.size < AUDIOMOTH_SEGMENT_SIZE;
+
+            lastSegment = inputFileDataSize - inputFileBytesRead < AUDIOMOTH_SEGMENT_SIZE;
+
             /* Read in at least the encoded block size */
 
             numberOfBytes = Math.min(inputFileDataSize - inputFileBytesRead, ENCODED_BLOCK_SIZE_IN_BYTES);
@@ -443,7 +451,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
                 /* If bytes read is less than encode block size it may be silent or audio data */
 
-                type = isFullOfZeros(fileBuffer, numberOfBytes) ? 'SILENT' : 'AUDIO';
+                type = (firstSegment || lastSegment) && isFullOfZeros(fileBuffer, numberOfBytes) ? 'SILENT' : 'AUDIO';
                 inputBytes = numberOfBytes;
                 outputBytes = numberOfBytes;
 
@@ -465,7 +473,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
                     /* Add audio block */
 
-                    type = isFullOfZeros(fileBuffer, ENCODED_BLOCK_SIZE_IN_BYTES) ? 'SILENT' : 'AUDIO';
+                    type = (firstSegment || lastSegment) && isFullOfZeros(fileBuffer, ENCODED_BLOCK_SIZE_IN_BYTES) ? 'SILENT' : 'AUDIO';
                     inputBytes = ENCODED_BLOCK_SIZE_IN_BYTES;
                     outputBytes = ENCODED_BLOCK_SIZE_IN_BYTES;
 
