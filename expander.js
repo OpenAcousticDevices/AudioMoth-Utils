@@ -27,7 +27,7 @@ const FILE_BUFFER_SIZE = 32 * 1024;
 
 const UINT32_SIZE_IN_BITS = 32;
 
-const FILENAME_REGEX = /^\d\d\d\d\d\d\d\d_\d\d\d\d\d\dT.WAV$/;
+const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT.WAV$/;
 
 /* Time constants */
 
