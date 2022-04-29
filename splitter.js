@@ -21,7 +21,7 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
-const FILENAME_REGEX = /^\d\d\d\d\d\d\d\d_\d\d\d\d\d\d.WAV$/;
+const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d.WAV$/;
 
 /* Time constants */
 
