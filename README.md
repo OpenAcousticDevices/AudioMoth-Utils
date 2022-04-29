@@ -19,7 +19,7 @@ audiomothUtils.expand(inputPath, expansionType, maximumFileDuration, generateSil
 }));
 ```
 
-To be identified as an AudioMoth T.WAV file, a recording must fit the regex `/^\d\d\d\d\d\d\d\d_\d\d\d\d\d\dT.WAV$/`.
+To be identified as an AudioMoth T.WAV file, a recording must fit the regex `/^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT.WAV$/` and have the correct WAV header comment.
 
 ---
 Split an AudioMoth WAV file into a number of smaller files:
@@ -30,7 +30,7 @@ audiomothUtils.split(inputPath, amplitudeThreshold, amplitudeThresholdString, mi
 }));
 ```
 
-To be identified as an AudioMoth WAV file, a recording must fit the regex `/^\d\d\d\d\d\d\d\d_\d\d\d\d\d\d.WAV$/`.
+To be identified as an AudioMoth WAV file, a recording must fit the regex `/^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d.WAV$/` and have the correct WAV header comment.
 
 ### Example applications using this module ###
 * [AudioMoth Configuration App](https://github.com/OpenAcousticDevices/AudioMoth-Configuration-App)
