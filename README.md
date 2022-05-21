@@ -11,7 +11,7 @@ var audiomothUtils = require('audiomoth-utils');
 
 #### Expanding and Splitting ####
 
-Expand an AudioMoth T.WAV recording (a recording with amplitude thresholding applied):
+Expand an AudioMoth T.WAV recording (a recording with amplitude thresholding or frequency triggering applied):
 
 ```javascript
 audiomothUtils.expand(inputPath, outputPath, prefix, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, (progress) => {
