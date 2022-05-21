@@ -14,7 +14,7 @@ var audiomothUtils = require('audiomoth-utils');
 Expand an AudioMoth T.WAV recording (a recording with amplitude thresholding applied):
 
 ```javascript
-audiomothUtils.expand(inputPath, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, (progress) => {
+audiomothUtils.expand(inputPath, outputPath, prefix, expansionType, maximumFileDuration, generateSilentFiles, alignToSecondTransitions, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
@@ -25,7 +25,7 @@ To be identified as an AudioMoth T.WAV file, a recording must fit the regex `/^(
 Split an AudioMoth WAV file into a number of smaller files:
 
 ```javascript
-audiomothUtils.split(inputPath, amplitudeThreshold, amplitudeThresholdString, minimumTriggerDuration, (progress) => {
+audiomothUtils.split(inputPath, outputPath, prefix, maximumFileDuration, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
