@@ -1,5 +1,5 @@
 # AudioMoth-Utils #
-A Node.js library for performing various tasks involving AudioMoth and files created by the AudioMoth. The module is hosted on npm under the name 'audiomoth-utils'.
+A Node.js library for performing various tasks involving AudioMoth and files created by the AudioMoth. The module is hosted on npm under the name 'audiomoth-utils' [here](https://www.npmjs.com/package/audiomoth-utils).
 
 ### Usage ###
 
