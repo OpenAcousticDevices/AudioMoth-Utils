@@ -9,7 +9,7 @@ The module should be imported as normal:
 var audiomothUtils = require('audiomoth-utils');
 ```
 
-#### Expanding and Splitting ####
+#### Expanding, Splitting and Downsampling ####
 
 Expand an AudioMoth T.WAV recording (a recording with amplitude thresholding or frequency triggering applied):
 
@@ -26,6 +26,17 @@ Split an AudioMoth WAV file into a number of smaller files:
 
 ```javascript
 audiomothUtils.split(inputPath, outputPath, prefix, maximumFileDuration, (progress) => {
+    console.log(progress + '% completed');
+}));
+```
+
+To be identified as an AudioMoth WAV file, a recording must fit the regex `/^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d.WAV$/` and have the correct WAV header comment.
+
+---
+Downsample an AudioMoth WAV file to a lower sample rate:
+
+```javascript
+audiomothUtils.split(inputPath, outputPath, prefix, requestedSampleRate, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
