@@ -103,7 +103,7 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length, callb
 
         numberOfBytes = Math.min(FILE_BUFFER_SIZE, offset + length - index);
 
-        /* Read from input file, and then write file bufferr */
+        /* Read from input file, and then write file buffer */
 
         fs.readSync(fi, fileBuffer, 0, numberOfBytes, header.size + index);
 
@@ -298,7 +298,6 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
         outputFileList.push({
             timestamp: timestamp,
-            milliseconds: false,
             offset: numberOfBytesProcessed,
             length: numberOfBytes
         });
@@ -327,7 +326,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
             comment = header.icmt.comment;
 
-            filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp, false);
+            filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp);
 
             outputCallback = function(value) {
 
@@ -353,7 +352,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
                 comment = 'Split from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
 
-                filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp, outputFileList[i].milliseconds);
+                filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp);
 
                 outputCallback = function(value) {
 
@@ -379,7 +378,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
         return {
             success: false,
-            error: 'Error occurred while processing duration-based output files. ' + e
+            error: 'Error occurred while splitting files. ' + e
         };
 
     }

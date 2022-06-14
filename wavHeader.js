@@ -271,6 +271,14 @@ function updateDataSize (header, size) {
 
 }
 
+function updateSampleRate (header, sampleRate) {
+
+    header.wavFormat.samplesPerSecond = sampleRate;
+
+    header.wavFormat.bytesPerSecond = sampleRate * NUMBER_OF_BYTES_IN_SAMPLE;
+
+}
+
 function updateComment (header, comment) {
 
     header.icmt.comment = comment;
@@ -290,5 +298,6 @@ function overwriteComment (header, comment) {
 exports.writeHeader = writeHeader;
 exports.readHeader = readHeader;
 exports.updateDataSize = updateDataSize;
+exports.updateSampleRate = updateSampleRate;
 exports.updateComment = updateComment;
 exports.overwriteComment = overwriteComment;
