@@ -36,7 +36,7 @@ To be identified as an AudioMoth WAV file, a recording must fit the regex `/^(\d
 Downsample an AudioMoth WAV file to a lower sample rate:
 
 ```javascript
-audiomothUtils.split(inputPath, outputPath, prefix, requestedSampleRate, (progress) => {
+audiomothUtils.downsample(inputPath, outputPath, prefix, requestedSampleRate, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
