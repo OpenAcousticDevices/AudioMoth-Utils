@@ -47,7 +47,7 @@ To be identified as an AudioMoth WAV file, a recording must fit the regex `/^(\d
 Synchronise an AudioMoth WAV file recorded using the AudioMoth-GPS-Sync firmware:
 
 ```javascript
-audiomothUtils.split(inputPath, outputPath, prefix, resampleRate, autoResolve, (progress) => {
+audiomothUtils.sync(inputPath, outputPath, prefix, resampleRate, autoResolve, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
