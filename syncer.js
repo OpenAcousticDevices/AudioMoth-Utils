@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const wavHeader = require('./wavHeader.js');
-const cvsReader = require('./cvsReader.js');
+const csvReader = require('./csvReader.js');
 
 /* Debug constant */
 
@@ -30,7 +30,7 @@ const HEADER_BUFFER_SIZE = 32 * 1024;
 
 const FILE_BUFFER_SIZE = 1024 * 1024;
 
-const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d.WAV$/;
+const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d\.WAV$/;
 
 /* Time constants */
 
@@ -312,7 +312,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    const result = cvsReader.readFile(csvPath, ['PPS_NUMBER', 'AUDIOMOTH_TIME', 'SAMPLES' ,'TOTAL_SAMPLES', 'TIMER_COUNT', 'TIME_TO_NEXT_SAMPLE', 'BUFFERS_FILLED', 'BUFFERS_WRITTEN'], [Number, String, Number, Number, Number, Number, Number, Number]);
+    const result = csvReader.readFile(csvPath, ['PPS_NUMBER', 'AUDIOMOTH_TIME', 'SAMPLES' ,'TOTAL_SAMPLES', 'TIMER_COUNT', 'TIME_TO_NEXT_SAMPLE', 'BUFFERS_FILLED', 'BUFFERS_WRITTEN'], [Number, String, Number, Number, Number, Number, Number, Number]);
 
     if (result.success == false) {
 
