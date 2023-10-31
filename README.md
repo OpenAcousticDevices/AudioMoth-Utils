@@ -62,10 +62,10 @@ To summarise a folder of AudioMoth files first clear any previous summary:
 audiomothUtils.summariser.initialise();
 ```
 
-Then provide the path to the parent folder and each individual file:
+Then provide the path to the parent folder and each file:
 
 ```javascript
-audiomothUtils.summariser.summarise(folderPath, filePath,, (progress) => {
+audiomothUtils.summariser.summarise(folderPath, filePath, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
