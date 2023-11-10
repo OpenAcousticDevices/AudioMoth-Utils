@@ -472,6 +472,8 @@ function summarise (folderPath, filePath, callback) {
 
             }
 
+            /* Calculate the number of samples */
+
             samples /= NUMBER_OF_BYTES_IN_SAMPLE;
 
         } catch (e) {
@@ -485,6 +487,14 @@ function summarise (folderPath, filePath, callback) {
         samples = inputFileDataSize / NUMBER_OF_BYTES_IN_SAMPLE;
 
     }
+
+    /* Close the file */
+
+    try {
+    
+        fs.closeSync(fi);  
+
+    } catch (e) { }
 
     /* Calculate duration */
 
