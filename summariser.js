@@ -30,7 +30,8 @@ const UINT32_SIZE_IN_BITS = 32;
 /* Regex constants */
 
 const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d\d\d\d\d\d\d\d_\d\d\d\d\d\d(_\d\d\d)?\.WAV$/, 
-                          /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT\.WAV$/];
+                          /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT\.WAV$/,
+                          /^([0-9a-zA-Z_]+_)?\d\d\d\d\d\d\d\d_\d\d\d\d\d\d_SYNC\.WAV$/];
 
 const TIMESTAMP_REGEX = /Recorded at (\d\d:\d\d:\d\d(\.\d\d\d)? \d\d\/\d\d\/\d\d\d\d) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
 
