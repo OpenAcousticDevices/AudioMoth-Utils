@@ -7,7 +7,6 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 

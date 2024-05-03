@@ -9,8 +9,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const wavHeader = require('./wavHeader.js');
 const csvReader = require('./csvReader.js');
+
+const wavHandler = require('./wavHandler.js');
+const guanoHandler = require('./guanoHandler.js');
 
 /* Debug constant */
 
@@ -134,8 +136,6 @@ function writeInt16(buffer, index, value) {
 
 function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callback) {
 
-    var fi, fo, fileSize;
-
     /* Check parameter */
 
     prefix = prefix || '';
@@ -161,6 +161,8 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     }
 
     /* Open input WAV file */
+
+    let fi;
 
     try {
 
@@ -189,6 +191,8 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     }
 
     /* Find the input file size */
+
+    let fileSize;
 
     try {
 
@@ -229,7 +233,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Check the header */
 
-    const headerCheck = wavHeader.readHeader(headerBuffer, fileSize);
+    const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
     if (headerCheck.success === false) {
 
@@ -652,7 +656,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     if (DEBUG) {
 
-        fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_DEBUG.TXT')), 'w');
+        const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_DEBUG.TXT')), 'w');
 
         if (debugText.length > 0) {
 
@@ -736,7 +740,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     if (DEBUG) {
 
-        fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_ALIGNED.CSV')), 'w');
+        const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_ALIGNED.CSV')), 'w');
 
         fs.writeSync(fo, 'INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
 
@@ -798,7 +802,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     if (autoResolve && (missedPPSEvent || unusualSampleRate)) {
 
-        fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '.TXT')), 'w');
+        const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '.TXT')), 'w');
 
         fs.writeSync(fo, autoResolveText);
 
@@ -854,13 +858,49 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
+    /* Read the GUANO if present */
+
+    let guano;
+
+    if (header.data.size + header.size < fileSize) {
+
+        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, FILE_BUFFER_SIZE);
+
+        try {
+
+            /* Read end of file into the buffer */
+
+            const numberOfBytesRead = fs.readSync(fi, headerBuffer, 0, numberOfBytes, header.data.size + header.size);
+
+            if (numberOfBytesRead === numberOfBytes) {
+
+                /* Parse the GUANO header */
+
+                const guanoCheck = guanoHandler.readGuano(headerBuffer, numberOfBytes);
+
+                if (guanoCheck.success) {
+
+                    guano = guanoCheck.guano;
+
+                }
+
+            }
+    
+        } catch (e) {
+
+            guano = null;
+
+        }
+
+    }
+
     /* Update the header */
 
-    wavHeader.updateSampleRate(header, targetSampleRate);
+    wavHandler.updateSampleRate(header, targetSampleRate);
 
-    wavHeader.updateDataSize (header, numberOfSamplesToWrite * NUMBER_OF_BYTES_IN_SAMPLE);
+    wavHandler.updateSizes(header, guano, numberOfSamplesToWrite * NUMBER_OF_BYTES_IN_SAMPLE);
 
-    wavHeader.writeHeader(headerBuffer, header);
+    wavHandler.writeHeader(headerBuffer, header);
 
     /* Allocate space for input and output */
 
@@ -880,7 +920,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Open the output file and write the header */
  
-    fo = fs.openSync(path.join(outputPath, outputFilename), 'w');
+    const fo = fs.openSync(path.join(outputPath, outputFilename), 'w');
 
     fs.writeSync(fo, headerBuffer, 0, header.size, null);
 
@@ -892,7 +932,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     fs.readSync(fi, syncInputBuffer, 0, FILE_BUFFER_SIZE, null);
 
-    /* Set up  through interval */
+    /* Set up the counters */
 
     let progress = 0;
 
@@ -1093,6 +1133,16 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     if (outputBufferIndex > 0) {
 
         fs.writeSync(fo, syncOutputBuffer, 0, outputBufferIndex * NUMBER_OF_BYTES_IN_SAMPLE, null);
+
+    }
+
+    /* Write the GUANO */
+
+    if (guano) {
+
+        guanoHandler.writeGuano(syncOutputBuffer, guano);
+
+        fs.writeSync(fo, syncOutputBuffer, 0, guano.size, null);
 
     }
 

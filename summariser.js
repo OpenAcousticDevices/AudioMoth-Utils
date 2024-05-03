@@ -9,15 +9,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const wavHeader = require('./wavHeader.js');
-
-/* Debug constant */
-
-const DEBUG = false;
+const wavHandler = require('./wavHandler.js');
+const guanoHandler = require('./guanoHandler.js');
 
 /* Expansion constants */
-
-const AUDIOMOTH_SEGMENT_SIZE = 32 * 1024;
 
 const ENCODED_BLOCK_SIZE_IN_BYTES = 512;
 
@@ -29,11 +24,11 @@ const UINT32_SIZE_IN_BITS = 32;
 
 /* Regex constants */
 
-const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d\d\d\d\d\d\d\d_\d\d\d\d\d\d(_\d\d\d)?\.WAV$/, 
-                          /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT\.WAV$/,
-                          /^([0-9a-zA-Z_]+_)?\d\d\d\d\d\d\d\d_\d\d\d\d\d\d_SYNC\.WAV$/];
+const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d{8}_\d{6}(_\d{3})?\.WAV$/, 
+                          /^(\d{8}_)?\d{6}T\.WAV$/,
+                          /^([0-9a-zA-Z_]+_)?\d{8}_\d{6}_SYNC\.WAV$/];
 
-const TIMESTAMP_REGEX = /Recorded at (\d\d:\d\d:\d\d(\.\d\d\d)? \d\d\/\d\d\/\d\d\d\d) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
+const TIMESTAMP_REGEX = /Recorded at (\d\d:\d\d:\d\d(\.\d{3})? \d\d\/\d\d\/\d{4}) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
 
 const BATTERY_GREATER_THAN_REGEX = /greater than 4.9V/;
 
@@ -45,9 +40,17 @@ const TEMPERATURE_REGEX = /(-?\d+\.\d)C/;
 
 const TRIGGER_REGEX = /T.WAV/;
 
-/* Time constants */
+const GUANO_LOCATION_REGEX_2 = /Loc Position:(\-?\d{1,2}\.\d{2}) (\-?\d{1,3}\.\d{2})/;
 
-const SECONDS_IN_DAY = 24 * 60 * 60;
+const GUANO_LOCATION_REGEX_6 = /Loc Position:(\-?\d{1,2}\.\d{6}) (\-?\d{1,3}\.\d{6})/;
+
+const GUANO_TIMESTAMP_REGEX = /Timestamp:(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:Z|(?:[\+\-]\d\d:\d\d)))/;
+
+const GUANO_TEMPERATURE_REGEX = /Temperature Int:(\-?\d+\.\d)/;
+
+const GUANO_VOLTAGE_REGEX = /OAD\|Battery Voltage:(\d\.\d)/;
+
+/* Time constants */
 
 const MILLISECONDS_IN_SECONDS = 1000;
 
@@ -59,7 +62,7 @@ const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 /* Summary constants */
 
-const HEADER = 'File Name,Folder,File Size (bytes),Timestamp,Sample Rate (Hz),Triggered,Samples,Duration (s),Temperature (C),Battery Voltage (V),Comment\r\n';
+const HEADER = 'File Name,Folder,File Size (bytes),Timestamp,Latitude,Longitude,Sample Rate (Hz),Triggered,Samples,Duration (s),Temperature (C),Battery Voltage (V),Comment\r\n';
 
 /* Global variables */
 
@@ -69,13 +72,11 @@ let results = [];
 
 function readEncodedBlock (buffer) {
 
-    var i, value, numberOfBlocks;
+    let numberOfBlocks = 0;
 
-    numberOfBlocks = 0;
+    for (let i = 0; i < UINT32_SIZE_IN_BITS; i += 1) {
 
-    for (i = 0; i < UINT32_SIZE_IN_BITS; i += 1) {
-
-        value = buffer.readInt16LE(NUMBER_OF_BYTES_IN_SAMPLE * i);
+        const value = buffer.readInt16LE(NUMBER_OF_BYTES_IN_SAMPLE * i);
 
         if (value === 1) {
 
@@ -89,9 +90,9 @@ function readEncodedBlock (buffer) {
 
     }
 
-    for (i = UINT32_SIZE_IN_BITS; i < ENCODED_BLOCK_SIZE_IN_BYTES / NUMBER_OF_BYTES_IN_SAMPLE; i += 1) {
+    for (let i = UINT32_SIZE_IN_BITS; i < ENCODED_BLOCK_SIZE_IN_BYTES / NUMBER_OF_BYTES_IN_SAMPLE; i += 1) {
 
-        value = buffer.readInt16LE(NUMBER_OF_BYTES_IN_SAMPLE * i);
+        const value = buffer.readInt16LE(NUMBER_OF_BYTES_IN_SAMPLE * i);
 
         if (value !== 0) {
 
@@ -107,9 +108,9 @@ function readEncodedBlock (buffer) {
 
 function digits(value, number) {
 
-    var string = '00000' + value;
+    const string = '00000' + value;
 
-    return string.substr(string.length - number);
+    return string.substring(string.length - number, string.length);
 
 }
 
@@ -129,13 +130,19 @@ function escapeString(input) {
 
 }
 
-function addResult(filename, folder, fileSize, timestamp, sampleRate, triggered, samples, duration, temperature, voltage, comment) {
+function addResult(filename, folder, fileSize, timestamp, latitude, longitude, sampleRate, triggered, samples, duration, temperature, voltage, comment) {
 
     let line = filename + ',' + escapeString(folder) + ',' + fileSize + ',';
 
     if (timestamp !== undefined && timestamp !== null) line += timestamp;
     line += ',';
-    
+
+    if (latitude !== undefined && latitude !== null) line += latitude;
+    line += ',';
+
+    if (longitude !== undefined && longitude !== null) line += longitude;
+    line += ',';
+
     if (sampleRate !== undefined && sampleRate !== null) line += sampleRate;
     line += ',';
 
@@ -245,9 +252,7 @@ function finalise (outputPath) {
 }
 
 function summarise (folderPath, filePath, callback) {
-
-    var fi, fileSize, samples, progress = 0;
-
+    
     /* Check the input filename */
 
     const filename = path.parse(filePath).base;
@@ -277,6 +282,8 @@ function summarise (folderPath, filePath, callback) {
     folder = folder.replace(new RegExp(separator + '$'), '');
     
     /* Open input file and find the file size */
+
+    let fi, fileSize;
 
     try {
 
@@ -314,7 +321,7 @@ function summarise (folderPath, filePath, callback) {
 
     /* Check the header */
 
-    const headerCheck = wavHeader.readHeader(headerBuffer, fileSize);
+    const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
     if (headerCheck.success === false) {
 
@@ -333,8 +340,11 @@ function summarise (folderPath, filePath, callback) {
     /* Declare the return values */
 
     let timestamp = null;
+    let latitude = null;
+    let longitude = null;
     let sampleRate = null;
     let triggered = null;
+    let samples = null;
     let duration = null;
     let temperature = null;
     let voltage = null;
@@ -395,11 +405,11 @@ function summarise (folderPath, filePath, callback) {
     
     /* Count samples */
 
+    let progress = 0;
+
     if (triggered) {
 
         /* Read the input file to count samples */
-
-        samples = 0;
 
         let inputFileBytesRead = 0;
 
@@ -489,14 +499,6 @@ function summarise (folderPath, filePath, callback) {
 
     }
 
-    /* Close the file */
-
-    try {
-    
-        fs.closeSync(fi);  
-
-    } catch (e) { }
-
     /* Calculate duration */
 
     duration = sampleRate !== undefined && sampleRate !== null ? Math.round(samples / sampleRate * MILLISECONDS_IN_SECONDS) / MILLISECONDS_IN_SECONDS : null;
@@ -517,9 +519,101 @@ function summarise (folderPath, filePath, callback) {
 
     }
 
+    /* Check for the GUANO */
+
+    if (header.data.size + header.size < fileSize) {
+
+        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, FILE_BUFFER_SIZE);
+
+        /* Read the GUANO */
+
+        try {
+
+            /* Read end of file into the buffer */
+
+            const numberOfBytesRead = fs.readSync(fi, fileBuffer, 0, numberOfBytes, header.data.size + header.size);
+
+            if (numberOfBytesRead === numberOfBytes) {
+
+                /* Parse the GUANO header */
+
+                const guanoCheck = guanoHandler.readGuano(fileBuffer, numberOfBytes);
+
+                if (guanoCheck.success) {
+
+                    /* Read latitude and longitude */
+
+                    const contents = guanoCheck.guano.contents;
+
+                    let locationMatch = contents.match(GUANO_LOCATION_REGEX_2);
+
+                    if (locationMatch) {
+
+                        latitude = locationMatch[1];
+
+                        longitude = locationMatch[2];
+
+                    } else {
+
+                        locationMatch = contents.match(GUANO_LOCATION_REGEX_6);
+
+                        if (locationMatch) {
+
+                            latitude = locationMatch[1];
+
+                            longitude = locationMatch[2];
+
+                        }
+
+                    }
+
+                    /* Read additional fields */
+
+                    const timestampMatch = contents.match(GUANO_TIMESTAMP_REGEX);
+
+                    const guanoTimestamp = timestampMatch ? timestampMatch[1] : null;
+    
+                    const temperatureMatch = contents.match(GUANO_TEMPERATURE_REGEX);
+
+                    const guanoTemperature = temperatureMatch ? temperatureMatch[1] : null;
+
+                    const voltageMatch = contents.match(GUANO_VOLTAGE_REGEX);
+
+                    const guanoVoltage = voltageMatch ? voltageMatch[1] : null;
+
+                    /* No exceptions so copy across GUANO data */
+
+                    if (timestamp === null) timestamp = guanoTimestamp;
+
+                    if (temperature === null) temperature = guanoTemperature;
+
+                    if (voltage === null) voltage = guanoVoltage;
+
+                }
+        
+            }           
+
+        } catch (e) {
+
+            latitude = null;
+
+            longitude = null;
+
+        }        
+
+    }
+
+    /* Close the file */
+
+    try {
+    
+        fs.closeSync(fi);  
+
+    } catch (e) { }
+
     /* Add results and return */
 
-    addResult(filename, folder, fileSize, timestamp, sampleRate, triggered, samples, duration, temperature, voltage, comment);
+    addResult(filename, folder, fileSize, timestamp, latitude, longitude, sampleRate, triggered, samples, duration, temperature, voltage, comment);
 
     if (callback && progress < 100) callback(100);
 
@@ -532,7 +626,5 @@ function summarise (folderPath, filePath, callback) {
 /* Export split */
 
 exports.initialise = initialise;
-
 exports.summarise = summarise;
-
 exports.finalise = finalise;

@@ -1,12 +1,12 @@
 /****************************************************************************
- * wavHeader.js
+ * wavHandler.js
  * openacousticdevices.info
- * June 2020
+ * February 2024
  *****************************************************************************/
 
 'use strict';
 
-/* WAV header constants */
+/* RIFF constants */
 
 const UINT16_LENGTH = 2;
 const UINT32_LENGTH = 4;
@@ -19,13 +19,13 @@ const NUMBER_OF_CHANNELS = 1;
 const NUMBER_OF_BITS_IN_SAMPLE = 16;
 const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
-/* WAV header base component read functions */
+/* WAV header component read functions */
 
 function readString (state, length) {
 
-    if (state.buffer.length - state.index < length) throw new Error('WAVE header exceeded buffer length.');
+    if (state.buffer.length - state.index < length) throw new Error('RIFF component exceeded buffer length.');
 
-    var result = state.buffer.toString('utf8', state.index, state.index + length).replace(/\0/g, '');
+    const result = state.buffer.toString('utf8', state.index, state.index + length).replace(/\0/g, '');
     state.index += length;
     return result;
 
@@ -33,9 +33,9 @@ function readString (state, length) {
 
 function readUInt32LE (state) {
 
-    if (state.buffer.length - state.index < UINT32_LENGTH) throw new Error('WAVE header exceeded buffer length.');
+    if (state.buffer.length - state.index < UINT32_LENGTH) throw new Error('RIFF component exceeded buffer length.');
 
-    var result = state.buffer.readUInt32LE(state.index);
+    const result = state.buffer.readUInt32LE(state.index);
     state.index += UINT32_LENGTH;
     return result;
 
@@ -43,19 +43,17 @@ function readUInt32LE (state) {
 
 function readUInt16LE (state) {
 
-    if (state.buffer.length - state.index < UINT16_LENGTH) throw new Error('WAVE header exceeded buffer length.');
+    if (state.buffer.length - state.index < UINT16_LENGTH) throw new Error('RIFF component exceeded buffer length.');
 
-    var result = state.buffer.readUInt16LE(state.index);
+    const result = state.buffer.readUInt16LE(state.index);
     state.index += UINT16_LENGTH;
     return result;
 
 }
 
-/* WAV header high-level component read functions */
-
 function readID (state, id) {
 
-    var result = readString (state, id.length);
+    const result = readString (state, id.length);
 
     if (result !== id) throw new Error('Could not find ' + id + ' ID.');
 
@@ -65,7 +63,7 @@ function readID (state, id) {
 
 function readChunk (state, id) {
 
-    var result = {};
+    const result = {};
 
     result.id = readString(state, RIFF_ID_LENGTH);
     
@@ -81,7 +79,7 @@ function readChunk (state, id) {
 
 function writeString (state, string, length, zeroTerminated) {
 
-    var maximumWriteLength = zeroTerminated ? Math.min(string.length, length - 1) : Math.min(string.length, length);
+    const maximumWriteLength = zeroTerminated ? Math.min(string.length, length - 1) : Math.min(string.length, length);
     state.buffer.fill(0, state.index, state.index + length);
     state.buffer.write(string, state.index, maximumWriteLength, 'utf8');
     state.index += length;
@@ -113,11 +111,9 @@ function writeChunk (state, chunk) {
 
 function readHeader (buffer, fileSize) {
 
-    var state, header;
+    const header = {};
 
-    header = {};
-
-    state = {buffer: buffer, index: 0};
+    const state = {buffer: buffer, index: 0};
 
     try {
 
@@ -198,11 +194,11 @@ function readHeader (buffer, fileSize) {
 
         header.size = state.index;
 
-        if (header.data.size + header.size !== fileSize) {
+        if (header.data.size + header.size > fileSize) {
 
             return {
                 success: false,
-                error: 'DATA chunk size does not match file size.'
+                error: 'DATA chunk size exceeds file size.'
             };
 
         }
@@ -217,7 +213,7 @@ function readHeader (buffer, fileSize) {
 
     } catch (e) {
 
-        /* Header has exceed file buffer length */
+        /* Header has exceed buffer length */
 
         return {
             success: false,
@@ -230,7 +226,7 @@ function readHeader (buffer, fileSize) {
 
 function writeHeader (buffer, header) {
 
-    var state = {buffer: buffer, index: 0};
+    const state = {buffer: buffer, index: 0};
 
     writeChunk(state, header.riff);
 
@@ -263,11 +259,11 @@ function writeHeader (buffer, header) {
 
 /* Functions to update header */
 
-function updateDataSize (header, size) {
+function updateSizes (header, guano, dataSize) {
 
-    header.riff.size = header.size + size - UINT32_LENGTH - RIFF_ID_LENGTH;
+    header.riff.size = header.size + (guano ? guano.size : 0) + dataSize - UINT32_LENGTH - RIFF_ID_LENGTH;
 
-    header.data.size = size;
+    header.data.size = dataSize;
 
 }
 
@@ -287,7 +283,7 @@ function updateComment (header, comment) {
 
 function overwriteComment (header, comment) {
 
-    var length = Math.min(comment.length, header.icmt.size - 1);
+    const length = Math.min(comment.length, header.icmt.size - 1);
 
     header.icmt.comment = comment.substr(0, length) + header.icmt.comment.substr(length);
 
@@ -297,7 +293,7 @@ function overwriteComment (header, comment) {
 
 exports.writeHeader = writeHeader;
 exports.readHeader = readHeader;
-exports.updateDataSize = updateDataSize;
+exports.updateSizes = updateSizes;
 exports.updateSampleRate = updateSampleRate;
 exports.updateComment = updateComment;
 exports.overwriteComment = overwriteComment;

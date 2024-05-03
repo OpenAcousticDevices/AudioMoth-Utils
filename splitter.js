@@ -9,7 +9,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const wavHeader = require('./wavHeader.js');
+const wavHandler = require('./wavHandler.js');
+const guanoHandler = require('./guanoHandler.js');
 
 /* Debug constant */
 
@@ -21,7 +22,7 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
-const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d\.WAV$/;
+const FILENAME_REGEX = /^(\d{8}_)?\d{6}\.WAV$/;
 
 /* Time constants */
 
@@ -29,7 +30,9 @@ const SECONDS_IN_DAY = 24 * 60 * 60;
 
 const MILLISECONDS_IN_SECONDS = 1000;
 
-const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
+const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d{4})/;
+
+const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
 /* Buffers for reading data */
 
@@ -41,19 +44,17 @@ const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 function digits (value, number) {
 
-    var string = '00000' + value;
+    const string = '00000' + value;
 
-    return string.substr(string.length - number);
+    return string.substring(string.length - number, string.length);
 
 }
 
 function formatFilename (timestamp) {
 
-    var date, filename;
+    const date = new Date(timestamp);
 
-    date = new Date(timestamp);
-
-    filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
+    let filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
 
     filename += '.WAV';
 
@@ -61,15 +62,27 @@ function formatFilename (timestamp) {
 
 }
 
+function formatTimestamp (timestamp) {
+
+    const date = new Date(timestamp);
+
+    const string = date.getUTCFullYear() + '-' + digits(date.getUTCMonth() + 1, 2) + '-' + digits(date.getUTCDate(), 2) + 'T' + digits(date.getUTCHours(), 2) + ':' + digits(date.getUTCMinutes(), 2) + ':' + digits(date.getUTCSeconds(), 2);
+
+    return string;
+
+}
+
 /* Write the output file */
 
-function writeOutputFile (fi, outputPath, header, comment, offset, length, callback) {
+function writeOutputFile (fi, outputPath, header, guano, comment, contents, offset, length, callback) {
 
     if (DEBUG) {
 
         console.log('Path: ' + outputPath);
 
         console.log('Comment: ' + comment);
+
+        console.log('Contents: ' + contents);
 
         console.log('Offset: ' + offset);
 
@@ -79,29 +92,31 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length, callb
 
     }
 
-    var fo, index, numberOfBytes;
+    const fo = fs.openSync(outputPath, 'w');
 
-    fo = fs.openSync(outputPath, 'w');
+    /* Update WAV header and GUANO */
 
-    /* Write the header */
+    if (comment) wavHandler.updateComment(header, comment);
 
-    wavHeader.updateDataSize(header, length);
+    if (guano && contents) guanoHandler.updateContents(guano, contents);
 
-    wavHeader.updateComment(header, comment);
+    wavHandler.updateSizes(header, guano, length);
 
-    wavHeader.writeHeader(headerBuffer, header);
+    /* Write the WAV header */
+
+    wavHandler.writeHeader(headerBuffer, header);
 
     fs.writeSync(fo, headerBuffer, 0, header.size, null);
 
     /* Write the data */
 
-    index = offset;
+    let index = offset;
 
     while (index < offset + length) {
 
         /* Determine the number of bytes to write */
 
-        numberOfBytes = Math.min(FILE_BUFFER_SIZE, offset + length - index);
+        const numberOfBytes = Math.min(FILE_BUFFER_SIZE, offset + length - index);
 
         /* Read from input file, and then write file buffer */
 
@@ -119,6 +134,16 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length, callb
 
     }
 
+    /* Write the GUANO */
+
+    if (guano) {
+
+        guanoHandler.writeGuano(fileBuffer, guano);
+
+        fs.writeSync(fo, fileBuffer, 0, guano.size, null);
+
+    }
+
     /* Close the output file */
 
     fs.closeSync(fo);
@@ -128,8 +153,6 @@ function writeOutputFile (fi, outputPath, header, comment, offset, length, callb
 /* Split a WAV file */
 
 function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
-
-    var i, fi, fileSize, header, headerCheck, progress, nextProgress, outputCallback, inputFileDataSize, regex, filename, comment, timestamp, originalTimestamp, outputFileList, numberOfBytes, numberOfBytesProcessed;
 
     /* Check parameter */
 
@@ -177,6 +200,8 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     /* Open input file */
 
+    let fi;
+
     try {
 
         fi = fs.openSync(inputPath, 'r');
@@ -204,6 +229,8 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
     }
 
     /* Find the input file size */
+
+    let fileSize;
 
     try {
 
@@ -244,7 +271,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     /* Check the header */
 
-    headerCheck = wavHeader.readHeader(headerBuffer, fileSize);
+    const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
     if (headerCheck.success === false) {
 
@@ -255,7 +282,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     }
 
-    header = headerCheck.header;
+    const header = headerCheck.header;
 
     /* Check the header comment format */
 
@@ -270,29 +297,29 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     /* Determine settings from the input file */
 
-    inputFileDataSize = header.data.size;
+    const inputFileDataSize = header.data.size;
 
     /* Determine timestamp of input file */
 
-    regex = DATE_REGEX.exec(header.icmt.comment);
+    const regex = DATE_REGEX.exec(header.icmt.comment);
 
-    originalTimestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
+    const originalTimestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
 
     /* Make the initial empty output file list */
 
-    outputFileList = [];
+    const outputFileList = [];
 
     /* Main loop generating files */
 
-    numberOfBytesProcessed = 0;
+    let numberOfBytesProcessed = 0;
 
-    timestamp = originalTimestamp;
+    let timestamp = originalTimestamp;
 
     while (numberOfBytesProcessed < inputFileDataSize) {
 
         /* Determine the number of bytes to write */
 
-        numberOfBytes = Math.min(maximumFileDuration * header.wavFormat.samplesPerSecond * NUMBER_OF_BYTES_IN_SAMPLE, inputFileDataSize - numberOfBytesProcessed);
+        const numberOfBytes = Math.min(maximumFileDuration * header.wavFormat.samplesPerSecond * NUMBER_OF_BYTES_IN_SAMPLE, inputFileDataSize - numberOfBytesProcessed);
 
         /* Add the output file if appropriate */
 
@@ -310,27 +337,65 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     /* Show the pruned output */
 
-    for (i = 0; i < outputFileList.length; i += 1) {
+    for (let i = 0; i < outputFileList.length; i += 1) {
 
         if (DEBUG) console.log(outputFileList[i]);
 
     }
 
+    /* Read the GUANO if present */
+
+    let guano, contents;
+
+    if (header.data.size + header.size < fileSize) {
+
+        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, FILE_BUFFER_SIZE);
+
+        try {
+
+            /* Read end of file into the buffer */
+
+            const numberOfBytesRead = fs.readSync(fi, fileBuffer, 0, numberOfBytes, header.data.size + header.size);
+
+            if (numberOfBytesRead === numberOfBytes) {
+
+                /* Parse the GUANO header */
+
+                const guanoCheck = guanoHandler.readGuano(fileBuffer, numberOfBytes);
+
+                if (guanoCheck.success) {
+
+                    guano = guanoCheck.guano;
+
+                    contents = guano.contents;
+
+                }
+
+            }
+    
+        } catch (e) {
+
+            guano = null;
+
+            contents = null;
+
+        }
+
+    }        
+
     /* Write the output files */
 
-    progress = 0;
+    let progress = 0;
 
     try {
 
         if (outputFileList.length === 1 && outputFileList[0].offset === 0 && outputFileList[0].length === inputFileDataSize) {
 
-            comment = header.icmt.comment;
+            const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp);
 
-            filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp);
+            const outputCallback = function(value) {
 
-            outputCallback = function(value) {
-
-                nextProgress = Math.round(100 * value);
+                const nextProgress = Math.round(100 * value);
 
                 if (nextProgress > progress) {
 
@@ -340,23 +405,25 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
     
                 }
     
-            }
+            };
 
-            writeOutputFile(fi, path.join(outputPath, filename), header, comment, 0, inputFileDataSize, outputCallback);
+            writeOutputFile(fi, path.join(outputPath, filename), header, guano, null, null, 0, inputFileDataSize, outputCallback);
 
         } else {
 
-            for (i = 0; i < outputFileList.length; i += 1) {
+            for (let i = 0; i < outputFileList.length; i += 1) {
 
-                if (i > 0) callback(Math.round(i / outputFileList.length * 100));
+                if (callback && i > 0) callback(Math.round(i / outputFileList.length * 100));
 
-                comment = 'Split from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
+                const comment = 'Split from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
 
-                filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp);
+                const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp);
 
-                outputCallback = function(value) {
+                const newContents = contents ? contents.replace(TIMESTAMP_REGEX, formatTimestamp(outputFileList[i].timestamp)) : null;
 
-                    nextProgress = Math.round(100 * (i + value) / outputFileList.length);
+                const outputCallback = function(value) {
+
+                    const nextProgress = Math.round(100 * (i + value) / outputFileList.length);
     
                     if (nextProgress > progress) {
     
@@ -366,15 +433,17 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
         
                     }
         
-                }
+                };
 
-                writeOutputFile(fi, path.join(outputPath, filename), header, comment, outputFileList[i].offset, outputFileList[i].length, outputCallback);
+                writeOutputFile(fi, path.join(outputPath, filename), header, guano, comment, newContents, outputFileList[i].offset, outputFileList[i].length, outputCallback);
 
             }
 
         }
 
     } catch (e) {
+
+        console.log(e);
 
         return {
             success: false,

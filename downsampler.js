@@ -9,11 +9,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const wavHeader = require('./wavHeader.js');
-
-/* Debug constant */
-
-const DEBUG = false;
+const wavHandler = require('./wavHandler.js');
+const guanoHandler = require('./guanoHandler.js');
 
 /* Downsample constants */
 
@@ -22,8 +19,6 @@ const INT16_MIN = -32768;
 const INT16_MAX = 32767;
 
 const HERTZ_IN_KILOHERTZ = 1000;
-
-const DEFAULT_SAMPLE_RATE = 48000;
 
 /* Valid sample rate */
 
@@ -38,10 +33,6 @@ const FILE_BUFFER_SIZE = 32 * 1024;
 const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d\.WAV$/;
 
 /* Time constants */
-
-const SECONDS_IN_DAY = 24 * 60 * 60;
-
-const MILLISECONDS_IN_SECONDS = 1000;
 
 const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
 
@@ -115,8 +106,6 @@ function writeInt16(buffer, index, value) {
 
 function downsample (inputPath, outputPath, prefix, requestedSampleRate, callback) {
 
-    var fileSize, fi, fo;
-
     /* Check parameter */
 
     prefix = prefix || '';
@@ -169,6 +158,8 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     /* Open input file */
 
+    let fi;
+
     try {
 
         fi = fs.openSync(inputPath, 'r');
@@ -196,6 +187,8 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
     }
 
     /* Find the input file size */
+
+    let fileSize;
 
     try {
 
@@ -236,7 +229,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     /* Check the header */
 
-    const headerCheck = wavHeader.readHeader(headerBuffer, fileSize);
+    const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
     if (headerCheck.success === false) {
 
@@ -248,6 +241,10 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
     }
 
     const header = headerCheck.header;
+
+    const originalHeaderSize = header.size;
+
+    const originalDataSize = header.data.size;
 
     /* Check the header comment format */
 
@@ -303,6 +300,8 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     const numberOfSamplesToWrite = Math.floor(numberOfSamplesInInput / divider) * multiplier;
 
+    let fo;
+
     let progress = 0;
 
     try {
@@ -313,11 +312,11 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
         /* Write the header */
 
-        wavHeader.updateDataSize(header, numberOfSamplesToWrite * NUMBER_OF_BYTES_IN_SAMPLE);
+        wavHandler.updateSizes(header, null, numberOfSamplesToWrite * NUMBER_OF_BYTES_IN_SAMPLE);
 
-        wavHeader.updateSampleRate(header, requestedSampleRate);
+        wavHandler.updateSampleRate(header, requestedSampleRate);
 
-        wavHeader.writeHeader(headerBuffer, header);
+        wavHandler.writeHeader(headerBuffer, header);
 
         fs.writeSync(fo, headerBuffer, 0, header.size, null);
 
@@ -429,7 +428,51 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
         }
 
+        /* Read the GUANO if present */
+
+        if (originalDataSize + originalHeaderSize < fileSize) {
+
+            const numberOfBytes = Math.min(fileSize - originalHeaderSize - originalDataSize, FILE_BUFFER_SIZE);
+
+            /* Read end of file into the buffer */
+
+            const numberOfBytesRead = fs.readSync(fi, inputBuffer, 0, numberOfBytes, originalDataSize + originalHeaderSize);
+
+            if (numberOfBytesRead === numberOfBytes) {
+
+                /* Parse the GUANO header */
+
+                const guanoCheck = guanoHandler.readGuano(inputBuffer, numberOfBytes);
+
+                if (guanoCheck.success) {
+                   
+                    console.log(guanoCheck);
+
+                    const guano = guanoCheck.guano;
+
+                    /* Write the GUANO */
+
+                    guanoHandler.writeGuano(outputBuffer, guano);
+
+                    fs.writeSync(fo, outputBuffer, 0, guano.size, null);
+
+                    /* Update the header */
+
+                    wavHandler.updateSizes(header, guano, numberOfSamplesToWrite * NUMBER_OF_BYTES_IN_SAMPLE);
+
+                    wavHandler.writeHeader(headerBuffer, header);
+
+                    fs.writeSync(fo, headerBuffer, 0, header.size, 0);
+
+                }
+
+            }
+
+        }  
+
     } catch (e) {
+
+        console.log(e);
 
         return {
             success: false,
