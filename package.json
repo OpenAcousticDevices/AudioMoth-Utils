@@ -1,6 +1,6 @@
 {
   "name": "audiomoth-utils",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Module of utilities for use with the AudioMoth and recordings created by AudioMoth.",
   "author": {
     "name": "openacousticdevices.info"
@@ -15,5 +15,13 @@
     "node": ">=10.16.2"
   },
   "optionalDependencies": {},
+  "devDependencies": {
+    "eslint": "^7.28.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "eslint-plugin-standard": "^5.0.0"
+  },
   "scripts": {}
 }

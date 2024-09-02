@@ -14,7 +14,7 @@ const fileBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 /* Function to handle an individual line */
 
-function parseLine(columnNames, tokens, parseFunctions, tokenMap, data) {
+function parseLine (columnNames, tokens, parseFunctions, tokenMap, data) {
 
     for (let i = 0; i < columnNames.length; i += 1) {
 
@@ -22,7 +22,7 @@ function parseLine(columnNames, tokens, parseFunctions, tokenMap, data) {
 
         const index = tokenMap[name];
 
-        if (typeof(index) === 'number') data[name].push(parseFunctions[i](tokens[index]));
+        if (typeof (index) === 'number') data[name].push(parseFunctions[i](tokens[index]));
 
     }
 
@@ -32,7 +32,7 @@ function parseLine(columnNames, tokens, parseFunctions, tokenMap, data) {
 
 function readFile (inputPath, columnNames, parseFunctions) {
 
-    var fi, fileSize, data, tokenMap, numberOfColumns;
+    let fi, fileSize, data, tokenMap, numberOfColumns;
 
     /* Check arguments */
 
@@ -118,18 +118,18 @@ function readFile (inputPath, columnNames, parseFunctions) {
 
                     numberOfColumns = tokens.length;
 
-                    for (let i = 0; i <columnNames.length; i += 1) {
+                    for (let i = 0; i < columnNames.length; i += 1) {
 
                         const name = columnNames[i];
 
                         for (let j = 0; j < tokens.length; j += 1) {
 
-                            if (name === tokens[j] && tokenMap[name] == undefined) {
+                            if (name === tokens[j] && tokenMap[name] === undefined) {
 
                                 tokenMap[name] = j;
 
                                 data[name] = [];
-                                
+
                             }
 
                         }

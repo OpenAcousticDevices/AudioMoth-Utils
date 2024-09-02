@@ -24,9 +24,9 @@ const UINT32_SIZE_IN_BITS = 32;
 
 /* Regex constants */
 
-const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d{8}_\d{6}(_\d{3})?\.WAV$/, 
-                          /^(\d{8}_)?\d{6}T\.WAV$/,
-                          /^([0-9a-zA-Z_]+_)?\d{8}_\d{6}_SYNC\.WAV$/];
+const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d{8}_\d{6}(_\d{3})?\.WAV$/,
+    /^(\d{8}_)?\d{6}T\.WAV$/,
+    /^([0-9a-zA-Z_]+_)?\d{8}_\d{6}_SYNC\.WAV$/];
 
 const TIMESTAMP_REGEX = /Recorded at (\d\d:\d\d:\d\d(\.\d{3})? \d\d\/\d\d\/\d{4}) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
 
@@ -106,7 +106,7 @@ function readEncodedBlock (buffer) {
 
 }
 
-function digits(value, number) {
+function digits (value, number) {
 
     const string = '00000' + value;
 
@@ -114,13 +114,13 @@ function digits(value, number) {
 
 }
 
-function escapeRegex(input) {
+function escapeRegex (input) {
 
     return input.replaceAll('\\', '\\\\');
 
 }
 
-function escapeString(input) {
+function escapeString (input) {
 
     let escapeString = input.replaceAll('"', '""');
 
@@ -130,7 +130,7 @@ function escapeString(input) {
 
 }
 
-function addResult(filename, folder, fileSize, timestamp, latitude, longitude, sampleRate, triggered, samples, duration, temperature, voltage, comment) {
+function addResult (filename, folder, fileSize, timestamp, latitude, longitude, sampleRate, triggered, samples, duration, temperature, voltage, comment) {
 
     let line = filename + ',' + escapeString(folder) + ',' + fileSize + ',';
 
@@ -147,8 +147,8 @@ function addResult(filename, folder, fileSize, timestamp, latitude, longitude, s
     line += ',';
 
     if (triggered !== undefined && triggered !== null) line += triggered ? '1' : '0';
-    line += ',';     
-    
+    line += ',';
+
     if (samples !== undefined && samples !== null) line += samples;
     line += ',';
 
@@ -167,7 +167,7 @@ function addResult(filename, folder, fileSize, timestamp, latitude, longitude, s
     results.push({
         filename: filename,
         folder: folder,
-        line: line 
+        line: line
     });
 
 }
@@ -184,21 +184,21 @@ function finalise (outputPath) {
 
     /* Declare a sort function */
 
-    const sortedResults = results.sort(function(a, b) {
-        
+    const sortedResults = results.sort(function (a, b) {
+
         let x = a.folder;
         let y = b.folder;
 
-        if (x>y) return 1; 
+        if (x > y) return 1;
 
-        if (x<y) return -1;
+        if (x < y) return -1;
 
         x = a.filename;
         y = b.filename;
- 
-        if (x>y) return 1; 
 
-        if (x<y) return -1;
+        if (x > y) return 1;
+
+        if (x < y) return -1;
 
         return 0;
 
@@ -231,14 +231,14 @@ function finalise (outputPath) {
 
         }
 
-        fs.closeSync(fo);   
+        fs.closeSync(fo);
 
     } catch (e) {
 
         return {
             success: false,
             error: 'Error writing output file.'
-        };    
+        };
 
     }
 
@@ -247,12 +247,12 @@ function finalise (outputPath) {
     return {
         success: true,
         error: null
-    }; 
+    };
 
 }
 
 function summarise (folderPath, filePath, callback) {
-    
+
     /* Check the input filename */
 
     const filename = path.parse(filePath).base;
@@ -265,7 +265,7 @@ function summarise (folderPath, filePath, callback) {
 
     }
 
-    if (valid == false) {
+    if (valid === false) {
 
         return false;
 
@@ -280,7 +280,7 @@ function summarise (folderPath, filePath, callback) {
     folder = folder.replace(new RegExp('^' + separator), '');
 
     folder = folder.replace(new RegExp(separator + '$'), '');
-    
+
     /* Open input file and find the file size */
 
     let fi, fileSize;
@@ -384,7 +384,7 @@ function summarise (folderPath, filePath, callback) {
             } else {
 
                 timestamp += ':00';
-                
+
             }
 
         } else {
@@ -401,8 +401,8 @@ function summarise (folderPath, filePath, callback) {
 
     /* Is triggered */
 
-    triggered = TRIGGER_REGEX.test(filename) ? true : false;
-    
+    triggered = !!TRIGGER_REGEX.test(filename);
+
     /* Count samples */
 
     let progress = 0;
@@ -473,7 +473,7 @@ function summarise (folderPath, filePath, callback) {
 
                 const nextProgress = Math.round(99 * inputFileBytesRead / inputFileDataSize);
 
-                if (nextProgress != progress) {
+                if (nextProgress !== progress) {
 
                     progress = nextProgress;
 
@@ -572,7 +572,7 @@ function summarise (folderPath, filePath, callback) {
                     const timestampMatch = contents.match(GUANO_TIMESTAMP_REGEX);
 
                     const guanoTimestamp = timestampMatch ? timestampMatch[1] : null;
-    
+
                     const temperatureMatch = contents.match(GUANO_TEMPERATURE_REGEX);
 
                     const guanoTemperature = temperatureMatch ? temperatureMatch[1] : null;
@@ -590,8 +590,8 @@ function summarise (folderPath, filePath, callback) {
                     if (voltage === null) voltage = guanoVoltage;
 
                 }
-        
-            }           
+
+            }
 
         } catch (e) {
 
@@ -599,15 +599,15 @@ function summarise (folderPath, filePath, callback) {
 
             longitude = null;
 
-        }        
+        }
 
     }
 
     /* Close the file */
 
     try {
-    
-        fs.closeSync(fi);  
+
+        fs.closeSync(fi);
 
     } catch (e) { }
 

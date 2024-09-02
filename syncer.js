@@ -13,6 +13,7 @@ const csvReader = require('./csvReader.js');
 
 const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
+const filenameHandler = require('./filenameHandler.js');
 
 /* Debug constant */
 
@@ -32,19 +33,21 @@ const HEADER_BUFFER_SIZE = 32 * 1024;
 
 const FILE_BUFFER_SIZE = 1024 * 1024;
 
-const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d\.WAV$/;
-
 /* Time constants */
 
 const HERTZ_IN_KILOHERTZ = 1000;
-
-const SECONDS_IN_DAY = 24 * 60 * 60;
 
 const MILLISECONDS_IN_SECOND = 1000;
 
 const MICROSECONDS_IN_SECOND = 1000 * MILLISECONDS_IN_SECOND;
 
-const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
+/* PPS accuracy constants */
+
+const MAX_HFXO_ERROR_ABSOLUTE = 100 / 1000000;
+
+const MAX_HFXO_ERROR_RELATIVE = 40 / 1000000;
+
+const MAX_LFXO_ERROR = 100 / 1000000;
 
 /* AudioMoth buffer constants */
 
@@ -78,34 +81,24 @@ const headerBuffer = Buffer.alloc(HEADER_BUFFER_SIZE);
 
 function digits (value, number) {
 
-    var string = '00000' + value;
+    const string = '00000' + value;
 
-    return string.substr(string.length - number);
-
-}
-
-function formatFilename (timestamp) {
-
-    var date, filename;
-
-    date = new Date(timestamp);
-
-    filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
-
-    return filename;
+    return string.substring(string.length - number);
 
 }
 
 /* Greatest common divisor function */
 
-function greatestCommonDivider(a, b) {
+function greatestCommonDivider (a, b) {
 
-    var c;
+    let c;
 
-    while (a != 0) {
-        c = a; 
-        a = b % a;  
+    while (a !== 0) {
+
+        c = a;
+        a = b % a;
         b = c;
+
     }
 
     return b;
@@ -114,9 +107,9 @@ function greatestCommonDivider(a, b) {
 
 /* Little-endian sample read and write functions */
 
-function readInt16(buffer, index) {
+function readInt16 (buffer, index) {
 
-    let value = buffer[index] + (buffer[index+1] << 8);
+    let value = buffer[index] + (buffer[index + 1] << 8);
 
     if (value > 0x7FFF) value -= 0x10000;
 
@@ -124,11 +117,11 @@ function readInt16(buffer, index) {
 
 }
 
-function writeInt16(buffer, index, value) {
+function writeInt16 (buffer, index, value) {
 
     buffer[index] = value & 0xFF;
 
-    buffer[index+1] = (value >> 8) & 0xFF;
+    buffer[index + 1] = (value >> 8) & 0xFF;
 
 }
 
@@ -136,7 +129,7 @@ function writeInt16(buffer, index, value) {
 
 function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callback) {
 
-    /* Check parameter */
+    /* Check prefix parameter */
 
     prefix = prefix || '';
 
@@ -149,16 +142,9 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    /* Check the input filename */
+    /* Check autoResolve parameter */
 
-    if (FILENAME_REGEX.test(path.parse(inputPath).base) === false) {
-
-        return {
-            success: false,
-            error: 'File name is incorrect.'
-        };
-
-    }
+    autoResolve = typeof autoResolve === 'boolean' ? autoResolve : false;
 
     /* Open input WAV file */
 
@@ -235,14 +221,9 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
-    if (headerCheck.success === false) {
+    if (headerCheck.success === false) return headerCheck;
 
-        return {
-            success: false,
-            error: headerCheck.error
-        };
-
-    }
+    /* Extract the header */
 
     const header = headerCheck.header;
 
@@ -261,40 +242,26 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    /* Check the header comment format */
+    /* Check the filename against header */
 
-    if (header.icmt.comment.search(DATE_REGEX) !== 0) {
+    const inputFilename = path.parse(inputPath).base;
 
-        return {
-            success: false,
-            error: 'Could not read the timestamp in the input WAV file header.'
-        };
+    const filenameCheck = filenameHandler.checkFilenameAgainstHeader(filenameHandler.SYNC, inputFilename, header.icmt.comment, header.iart.artist);
 
-    }
+    if (filenameCheck.success === false) return filenameCheck;
 
-    /* Check the timestamp of input file and generate the output file */
+    /* Extract original timestamp */
 
-    const regex = DATE_REGEX.exec(header.icmt.comment);
+    const originalTimestamp = filenameCheck.originalTimestamp;
 
-    const originalTimestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
-   
-    const inputFilename = formatFilename(originalTimestamp) + '.WAV';
-   
-    if (inputFilename !== path.parse(inputPath).base) {
-   
-        return {
-            success: false,
-            error: 'Timestamp in the input WAV file header does not match the file name.'
-        };
-
-    }
+    /* Generate output filename */
 
     const outputFilename = (prefix === '' ? '' : prefix + '_') + inputFilename.replace('.WAV', '_SYNC.WAV');
 
     /* Determine settings from the input file */
 
     const inputFileDataSize = header.data.size;
-    
+
     const sampleRate = header.wavFormat.samplesPerSecond;
 
     const sampleInterval = MICROSECONDS_IN_SECOND / sampleRate;
@@ -316,9 +283,9 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    const result = csvReader.readFile(csvPath, ['PPS_NUMBER', 'AUDIOMOTH_TIME', 'SAMPLES' ,'TOTAL_SAMPLES', 'TIMER_COUNT', 'TIME_TO_NEXT_SAMPLE', 'BUFFERS_FILLED', 'BUFFERS_WRITTEN'], [Number, String, Number, Number, Number, Number, Number, Number]);
+    const result = csvReader.readFile(csvPath, ['PPS_NUMBER', 'AUDIOMOTH_TIME', 'SAMPLES', 'TOTAL_SAMPLES', 'TIMER_COUNT', 'TIME_TO_NEXT_SAMPLE', 'BUFFERS_FILLED', 'BUFFERS_WRITTEN'], [Number, String, Number, Number, Number, Number, Number, Number]);
 
-    if (result.success == false) {
+    if (result.success === false) {
 
         return {
             success: false,
@@ -329,18 +296,18 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Extract data */
 
-    const PPS_NUMBER = result.data['PPS_NUMBER'];
-    const AUDIOMOTH_TIME = result.data['AUDIOMOTH_TIME'];
-    const TOTAL_SAMPLES = result.data['TOTAL_SAMPLES'];
-    const TIMER_COUNT = result.data['TIMER_COUNT'];
-    const BUFFERS_FILLED = result.data['BUFFERS_FILLED'];
-    const BUFFERS_WRITTEN = result.data['BUFFERS_WRITTEN'];
+    const PPS_NUMBER = result.data.PPS_NUMBER;
+    const AUDIOMOTH_TIME = result.data.AUDIOMOTH_TIME;
+    const TOTAL_SAMPLES = result.data.TOTAL_SAMPLES;
+    const TIMER_COUNT = result.data.TIMER_COUNT;
+    const BUFFERS_FILLED = result.data.BUFFERS_FILLED;
+    const BUFFERS_WRITTEN = result.data.BUFFERS_WRITTEN;
 
     let numberOfRows = 0;
 
     let dataOkay = PPS_NUMBER && PPS_NUMBER.length && PPS_NUMBER.length > 1;
 
-    if (dataOkay == false) {
+    if (dataOkay === false) {
 
         return {
             success: false,
@@ -357,7 +324,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     dataOkay = dataOkay && (BUFFERS_FILLED && BUFFERS_FILLED.length && BUFFERS_FILLED.length === numberOfRows);
     dataOkay = dataOkay && (BUFFERS_WRITTEN && BUFFERS_WRITTEN.length && BUFFERS_WRITTEN.length === numberOfRows);
 
-    if (dataOkay == false) {
+    if (dataOkay === false) {
 
         return {
             success: false,
@@ -386,7 +353,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    if (dateOkay == false) {
+    if (dateOkay === false) {
 
         return {
             success: false,
@@ -412,7 +379,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Determine the sample parameters */
 
-    const overSampleRate = 2**Math.floor(Math.log2(MAXIMUM_REFERENCE_SAMPLE_RATE / sampleRate))
+    const overSampleRate = 2 ** Math.floor(Math.log2(MAXIMUM_REFERENCE_SAMPLE_RATE / sampleRate));
 
     const clockTicksBetweenSamples = CLOCK_FREQUENCY / sampleRate;
 
@@ -425,7 +392,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     for (let i = 0; i < numberOfRows; i += 1) {
 
         if (TIMER_COUNT[i] <= clockTicksToCompleteSample) {
-             
+
             TIME_TO_NEXT_SAMPLE[i] = (clockTicksToCompleteSample - TIMER_COUNT[i]) / CLOCK_FREQUENCY * MICROSECONDS_IN_SECOND;
 
         } else {
@@ -437,53 +404,127 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     }
 
     /* Calculate the interval between PPS events and the number of samples */
-    
+
     let autoResolveText = '';
 
     let missedPPSEvent = false;
 
-    const intervals = new Array(numberOfRows - 1);
+    let misalignedPPSEvent = false;
 
-    const numberOfIntervals = intervals.length;
+    const intervals = [];
+
+    let numberOfIntervals = 0;
+
+    let cumulativeTimeInterval = 0;
+
+    let currentIndex = 0;
+
+    let currentSamples = TOTAL_SAMPLES[0];
+
+    let currentDate = Date.parse(AUDIOMOTH_TIME[0] + 'Z');
+
+    let sampleRateTotal = 0;
+
+    let sampleRateCount = 0;
 
     try {
 
-        for (let i = 0; i < numberOfIntervals; i += 1) {
+        for (let i = 1; i < numberOfRows; i += 1) {
 
-            const date = Date.parse(AUDIOMOTH_TIME[i] + 'Z');
+            /* Read next time and sample values */
 
-            const nextDate = Date.parse(AUDIOMOTH_TIME[i+1] + 'Z');
+            const nextIndex = i;
 
-            const timeInterval = Math.round((nextDate - date) / MILLISECONDS_IN_SECOND);
- 
-            if (timeInterval > 1) {
+            const nextSamples = TOTAL_SAMPLES[i];
 
-                missedPPSEvent = true;
+            const nextDate = Date.parse(AUDIOMOTH_TIME[i] + 'Z');
 
-                if (autoResolve == false) {
+            /* Calculate differences */
+
+            const samples = nextSamples - currentSamples;
+
+            const timeInterval = nextDate - currentDate;
+
+            const roundedTimeInterval = Math.round(timeInterval / MILLISECONDS_IN_SECOND);
+
+            /* Calculate maximum allowable error */
+
+            const targetSampleRate = sampleRateCount === 0 ? sampleRate : sampleRateTotal / sampleRateCount;
+
+            const maximumAllowableTimeError = Math.ceil(MAX_LFXO_ERROR * roundedTimeInterval * MILLISECONDS_IN_SECOND);
+
+            const maximumAllowableSampleRateError = Math.ceil((sampleRateCount === 0 ? MAX_HFXO_ERROR_ABSOLUTE : MAX_HFXO_ERROR_RELATIVE) * (sampleRateCount === 0 ? sampleRate : targetSampleRate) * roundedTimeInterval);
+
+            /* Check this PPS event */
+
+            if (roundedTimeInterval > 0 && Math.abs(timeInterval - roundedTimeInterval * MILLISECONDS_IN_SECOND) <= maximumAllowableTimeError && Math.abs(samples - roundedTimeInterval * targetSampleRate) <= maximumAllowableSampleRateError) {
+
+                /* Update average sample rate */
+
+                sampleRateTotal += samples;
+
+                sampleRateCount += roundedTimeInterval;
+
+                /* Add the interval */
+
+                const interval = {
+                    index: numberOfIntervals,
+                    numberOfSamples: samples,
+                    startPPSIndex: currentIndex,
+                    endPPSIndex: nextIndex,
+                    timeInterval: roundedTimeInterval,
+                    cumulativeTimeInterval: cumulativeTimeInterval,
+                    firstSampleGap: TIME_TO_NEXT_SAMPLE[currentIndex],
+                    lastSampleGap: sampleInterval - TIME_TO_NEXT_SAMPLE[nextIndex]
+                };
+
+                intervals.push(interval);
+
+                numberOfIntervals += 1;
+
+                cumulativeTimeInterval += roundedTimeInterval;
+
+                /* Set the flag and stop if autoresolve is not enabled */
+
+                if (roundedTimeInterval > 1) {
+
+                    missedPPSEvent = true;
+
+                    if (autoResolve === false) {
+
+                        return {
+                            success: false,
+                            error: 'Input CSV file has a missing PPS event.'
+                        };
+
+                    }
+
+                }
+
+                /* Update for next interval */
+
+                currentIndex = nextIndex;
+
+                currentSamples = nextSamples;
+
+                currentDate = nextDate;
+
+            } else {
+
+                /* Set the flag and stop if autoresolve is not enabled */
+
+                misalignedPPSEvent = true;
+
+                if (autoResolve === false) {
 
                     return {
                         success: false,
-                        error: 'Input CSV file has a missing PPS event.'
+                        error: 'Input CSV file has a misaligned PPS event.'
                     };
 
                 }
 
             }
-
-            if (timeInterval < 1) {
-
-                return {
-                    success: false,
-                    error: 'Input CSV file has PPS events with unusual timestamps.'
-                };
-
-            }
-
-            intervals[i] = { 
-                index: i,
-                timeInterval: timeInterval
-            };
 
         }
 
@@ -496,9 +537,20 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
+    /* Check at least one interval */
+
+    if (numberOfIntervals === 0) {
+
+        return {
+            success: false,
+            error: 'Input CSV file does not contain any valid intervals between PPS events.'
+        };
+
+    }
+
     /* Function to calculate and set sample rate */
 
-    function calculateSampleRate(interval) {
+    function calculateSampleRate (interval) {
 
         interval.sampleRate = (interval.numberOfSamples - 1) * MICROSECONDS_IN_SECOND / (interval.timeInterval * MICROSECONDS_IN_SECOND - interval.firstSampleGap - interval.lastSampleGap);
 
@@ -508,13 +560,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     for (let i = 0; i < numberOfIntervals; i += 1) {
 
-        intervals[i].numberOfSamples = TOTAL_SAMPLES[i+1] - TOTAL_SAMPLES[i];
-
-        intervals[i].firstSampleGap = TIME_TO_NEXT_SAMPLE[i];
-
-        intervals[i].lastSampleGap = sampleInterval - TIME_TO_NEXT_SAMPLE[i+1];
-
-        calculateSampleRate(intervals[i])
+        calculateSampleRate(intervals[i]);
 
     }
 
@@ -536,17 +582,47 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Generate report when auto-resolving issues */
 
-    if (missedPPSEvent && autoResolve) {
+    function formatIntervalTime (interval) {
 
-        autoResolveText += 'MISSED PPS EVENTS\n-----------------\n'
+        const startTime = new Date(originalTimestamp.valueOf() + interval.cumulativeTimeInterval * MILLISECONDS_IN_SECOND);
+
+        const endTime = new Date(startTime.valueOf() + interval.timeInterval * MILLISECONDS_IN_SECOND);
+
+        let string = digits(startTime.getUTCHours(), 2) + ':' + digits(startTime.getUTCMinutes(), 2) + ':' + digits(startTime.getUTCSeconds(), 2);
+
+        string += ' - ' + digits(endTime.getUTCHours(), 2) + ':' + digits(endTime.getUTCMinutes(), 2) + ':' + digits(endTime.getUTCSeconds(), 2);
+
+        return string;
+
+    }
+
+    if (missedPPSEvent) {
+
+        autoResolveText += 'MISSED PPS EVENTS\n-----------------\n';
 
         for (let i = 0; i < numberOfIntervals; i += 1) {
 
-            const timeInterval = intervals[i].timeInterval;
+            if (intervals[i].timeInterval > 1) {
 
-            if (timeInterval > 1) {
+                autoResolveText += formatIntervalTime(intervals[i]) + ': Interval from PPS number ' + intervals[i].startPPSIndex + ' to ' + intervals[i].endPPSIndex + ' has a duration of ' + intervals[i].timeInterval + ' seconds.\n';
 
-                autoResolveText += 'Interval between PPS indices ' + i + ' and ' + (i + 1) + ' has a duration of ' + timeInterval + ' seconds.\n';
+            }
+
+        }
+
+    }
+
+    if (missedPPSEvent && misalignedPPSEvent) autoResolveText += '\n';
+
+    if (misalignedPPSEvent) {
+
+        autoResolveText += 'MISALIGNED PPS EVENTS\n---------------------\n';
+
+        for (let i = 0; i < numberOfIntervals; i += 1) {
+
+            if (intervals[i].startPPSIndex !== intervals[i].endPPSIndex - 1) {
+
+                autoResolveText += formatIntervalTime(intervals[i]) + ': Interval from PPS number ' + intervals[i].startPPSIndex + ' to ' + intervals[i].endPPSIndex + ' contains misaligned PPS events.\n';
 
             }
 
@@ -558,15 +634,15 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     if (DEBUG) {
 
-        fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_UNFIXED.CSV')), 'w');
+        const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_UNFIXED.CSV')), 'w');
 
-        fs.writeSync(fo, 'INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
+        fs.writeSync(fo, 'INDEX,PPS_START_INDEX,PPS_END_INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
 
         for (let i = 0; i < numberOfIntervals; i += 1) {
 
             const interval = intervals[i];
 
-            fs.writeSync(fo, interval.index + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
+            fs.writeSync(fo, interval.index + ',' + interval.startPPSIndex + ',' + interval.endPPSIndex + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
 
         }
 
@@ -584,7 +660,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
             const interval = intervals[i];
 
-            const nextInterval = intervals[i+1];
+            const nextInterval = intervals[i + 1];
 
             if (interval.lastSampleGap < MAXIMUM_ALLOWABLE_PPS_OFFSET && Math.round(interval.sampleRate - averageSampleRate) === -1 && Math.round(nextInterval.sampleRate - averageSampleRate) === 1) {
 
@@ -606,11 +682,29 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         if (sampleRate === MAXIMUM_ALLOWABLE_SAMPLE_RATE) {
 
+            /* Check first interval */
+
+            const interval = intervals[0];
+
+            if (Math.round(interval.sampleRate - averageSampleRate) === 1) {
+
+                /* There seems to be an extra sample in the first interval */
+
+                debugText += 'Fixed extra sample due to close PPS event at interval 0.\n';
+
+                interval.firstSampleGap -= sampleInterval;
+
+                calculateSampleRate(interval);
+
+            }
+
+            /* Check all intervals */
+
             for (let i = 0; i < numberOfIntervals - 1; i += 1) {
 
-                const interval = intervals[i];   
-                
-                const nextInterval = intervals[i+1];
+                const interval = intervals[i];
+
+                const nextInterval = intervals[i + 1];
 
                 if (interval.lastSampleGap < MAXIMUM_ALLOWABLE_PPS_OFFSET && Math.round(interval.sampleRate - averageSampleRate) === -1 && Math.round(nextInterval.sampleRate - averageSampleRate) === 0) {
 
@@ -632,7 +726,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
             for (let i = 0; i < numberOfIntervals; i += 1) {
 
-                const interval = intervals[i]; 
+                const interval = intervals[i];
 
                 if (Math.round(interval.sampleRate - averageSampleRate) === -1) {
 
@@ -651,12 +745,12 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
         }
 
     }
-    
+
     /* Output the debug file */
 
     if (DEBUG) {
 
-        const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_DEBUG.TXT')), 'w');
+        let fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_DEBUG.TXT')), 'w');
 
         if (debugText.length > 0) {
 
@@ -672,13 +766,13 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_FIXED.CSV')), 'w');
 
-        fs.writeSync(fo, 'INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
+        fs.writeSync(fo, 'INDEX,PPS_START_INDEX,PPS_END_INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
 
         for (let i = 0; i < numberOfIntervals; i += 1) {
 
             const interval = intervals[i];
 
-            fs.writeSync(fo, interval.index + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
+            fs.writeSync(fo, interval.index + ',' + interval.startPPSIndex + ',' + interval.endPPSIndex + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
 
         }
 
@@ -686,13 +780,19 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    /* Adjust interval times by half the conversion period */
+    /* Check first interval for early sample (resulting from correction at MAXIMUM_ALLOWABLE_SAMPLE_RATE */
 
-    let firstSampleIsBeforeFirstInterval = false; 
+    let firstSampleIsBeforeFirstInterval = intervals[0].firstSampleGap < 0;
+
+    /* Adjust interval times by half the conversion period */
 
     if (ALIGN_SAMPLES) {
 
-        const timeOffset = MICROSECONDS_IN_SECOND * clockTicksToCompleteSample / 2 / CLOCK_FREQUENCY;
+        const lastAquisitionEnds = 1 + CLOCK_DIVIDER * (CONVERSION_CYCLES + 1);
+
+        const firstAquisitionStarts = clockTicksToCompleteSample - 1 - CLOCK_DIVIDER;
+
+        const timeOffset = MICROSECONDS_IN_SECOND * (lastAquisitionEnds + firstAquisitionStarts) / 2 / CLOCK_FREQUENCY;
 
         for (let i = 0; i < numberOfIntervals; i += 1) {
 
@@ -708,15 +808,15 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
                 interval.firstSampleGap += sampleInterval;
 
-                if (i == 0) {
-                    
+                if (i === 0) {
+
                     firstSampleIsBeforeFirstInterval = true;
 
                 } else {
 
-                    intervals[i-1].numberOfSamples += 1;
+                    intervals[i - 1].numberOfSamples += 1;
 
-                    intervals[i-1].lastSampleGap = sampleInterval - interval.firstSampleGap;
+                    intervals[i - 1].lastSampleGap = sampleInterval - interval.firstSampleGap;
 
                 }
 
@@ -731,7 +831,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     for (let i = 0; i < numberOfIntervals; i += 1) {
 
         const interval = intervals[i];
-        
+
         calculateSampleRate(interval);
 
     }
@@ -742,13 +842,13 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '_ALIGNED.CSV')), 'w');
 
-        fs.writeSync(fo, 'INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
+        fs.writeSync(fo, 'INDEX,PPS_START_INDEX,PPS_END_INDEX,INTERVAL,SAMPLES,SAMPLE_RATE,TIME_TO_FIRST_SAMPLE,TIME_FROM_LAST_SAMPLE\n');
 
         for (let i = 0; i < numberOfIntervals; i += 1) {
 
             const interval = intervals[i];
 
-            fs.writeSync(fo, interval.index + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
+            fs.writeSync(fo, interval.index + ',' + interval.startPPSIndex + ',' + interval.endPPSIndex + ',' + interval.timeInterval + ',' + interval.numberOfSamples + ',' + interval.sampleRate.toFixed(4) + ',' + interval.firstSampleGap.toFixed(2) + ',' + interval.lastSampleGap.toFixed(2) + '\n');
 
         }
 
@@ -768,24 +868,28 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         if (sampleRateDifference !== 0) {
 
-            if (missedPPSEvent) autoResolveText += '\n';
+            if (unusualSampleRate === false) {
 
-            if (unusualSampleRate == false) autoResolveText += 'UNUSUAL SAMPLE RATE\n-------------------\n'
-            
+                if (missedPPSEvent || misalignedPPSEvent) autoResolveText += '\n';
+
+                autoResolveText += 'UNUSUAL SAMPLE RATE\n-------------------\n';
+
+            }
+
             unusualSampleRate = true;
 
-            autoResolveText += 'Interval between PPS indices ' + i + ' and ' + (i + 1) + ' has ';
-            
+            autoResolveText += formatIntervalTime(interval) + ': Interval from PPS number ' + interval.startPPSIndex + ' to ' + interval.endPPSIndex + ' has ';
+
             if (sampleRateDifference > 1) {
 
                 autoResolveText += sampleRateDifference + ' extra samples';
 
-            } else if (sampleRateDifference == 1) {
+            } else if (sampleRateDifference === 1) {
 
                 autoResolveText += '1 extra sample';
 
-            } else if (sampleRateDifference == -1) {
-            
+            } else if (sampleRateDifference === -1) {
+
                 autoResolveText += '1 less sample';
 
             } else if (sampleRateDifference < -1) {
@@ -794,13 +898,22 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
             }
 
-            autoResolveText += ' per second.\n'
+            autoResolveText += ' per second.\n';
 
         }
 
     }
 
-    if (autoResolve && (missedPPSEvent || unusualSampleRate)) {
+    if (unusualSampleRate && autoResolve === false) {
+
+        return {
+            success: false,
+            error: 'Input CSV file has an unusual sample count between PPS events.'
+        };
+
+    }
+
+    if (missedPPSEvent || misalignedPPSEvent || unusualSampleRate) {
 
         const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '.TXT')), 'w');
 
@@ -808,12 +921,21 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         fs.closeSync(fo);
 
-    } else if (unusualSampleRate) {
+    }
 
-        return {
-            success: false,
-            error: 'Could not correct timing of PPS events in input CSV file.'
-        };
+    /* Shift due to missing sample at highest sample rate */
+
+    if (sampleRate === MAXIMUM_ALLOWABLE_SAMPLE_RATE) {
+
+        for (let i = 0; i < numberOfIntervals; i += 1) {
+
+            const interval = intervals[i];
+
+            interval.firstSampleGap += sampleInterval;
+
+            calculateSampleRate(interval);
+
+        }
 
     }
 
@@ -821,7 +943,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     let targetSampleRate = sampleRate;
 
-    let maximumNumberOfSamplesToRead = Math.floor(inputFileDataSize / NUMBER_OF_BYTES_IN_SAMPLE);
+    const maximumNumberOfSamplesToRead = Math.floor(inputFileDataSize / NUMBER_OF_BYTES_IN_SAMPLE);
 
     let numberOfSamplesToWrite = maximumNumberOfSamplesToRead;
 
@@ -885,7 +1007,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
                 }
 
             }
-    
+
         } catch (e) {
 
             guano = null;
@@ -907,7 +1029,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     let maximumTimeInterval = 0;
 
     for (let i = 0; i < numberOfIntervals; i += 1) {
-        
+
         const interval = intervals[i];
 
         maximumTimeInterval = Math.max(maximumTimeInterval, interval.timeInterval);
@@ -919,7 +1041,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
     const syncOutputBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
     /* Open the output file and write the header */
- 
+
     const fo = fs.openSync(path.join(outputPath, outputFilename), 'w');
 
     fs.writeSync(fo, headerBuffer, 0, header.size, null);
@@ -946,15 +1068,15 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Function to read sample values */
 
-    function readSampleValue() {
+    function readSampleValue () {
 
         const sampleValue = readInt16(syncInputBuffer, inputBufferIndex * NUMBER_OF_BYTES_IN_SAMPLE);
-    
+
         numberOfSamplesRead += 1;
 
         inputBufferIndex += 1;
 
-        if (inputBufferIndex == FILE_BUFFER_SIZE / NUMBER_OF_BYTES_IN_SAMPLE) {
+        if (inputBufferIndex === FILE_BUFFER_SIZE / NUMBER_OF_BYTES_IN_SAMPLE) {
 
             fs.readSync(fi, syncInputBuffer, 0, FILE_BUFFER_SIZE, null);
 
@@ -964,11 +1086,11 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         return sampleValue;
 
-    }   
+    }
 
     /* Function to write sample value */
 
-    function writeSampleValue(value) {
+    function writeSampleValue (value) {
 
         writeInt16(syncOutputBuffer, outputBufferIndex * NUMBER_OF_BYTES_IN_SAMPLE, value);
 
@@ -976,14 +1098,14 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         outputBufferIndex += 1;
 
-        if (outputBufferIndex == FILE_BUFFER_SIZE / NUMBER_OF_BYTES_IN_SAMPLE) {
+        if (outputBufferIndex === FILE_BUFFER_SIZE / NUMBER_OF_BYTES_IN_SAMPLE) {
 
             fs.writeSync(fo, syncOutputBuffer, 0, FILE_BUFFER_SIZE, null);
 
             outputBufferIndex = 0;
 
-        } 
-        
+        }
+
     }
 
     /* Set up initial values */
@@ -1027,7 +1149,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
                 /* Read the next sample value */
 
                 if (numberOfSamplesRead < maximumNumberOfSamplesToRead && numberOfSamplesRead < totalNumberOfSamples + 1) {
-                    
+
                     nextSampleValue = readSampleValue();
 
                 }
@@ -1037,7 +1159,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
                 nextSampleOffset += 1 / interval.sampleRate;
 
             }
-            
+
             /* Calculate the interpolated sample value */
 
             const interpolatedSampleValue = Math.round(previousSampleValue + (currentOffset - previousSampleOffset) / (nextSampleOffset - previousSampleOffset) * (nextSampleValue - previousSampleValue));
@@ -1049,7 +1171,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
                 writeSampleValue(interpolatedSampleValue);
 
             }
-            
+
         }
 
         /* Read on to next sample */
@@ -1080,7 +1202,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     let currentOffset = 0;
 
-    const interval = intervals[numberOfIntervals-1];
+    const interval = intervals[numberOfIntervals - 1];
 
     let previousSampleOffset = -interval.lastSampleGap / MICROSECONDS_IN_SECOND;
 
@@ -1099,7 +1221,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
             /* Read the next sample value */
 
             if (numberOfSamplesRead < maximumNumberOfSamplesToRead) {
-                
+
                 nextSampleValue = readSampleValue();
 
             }
@@ -1109,9 +1231,9 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
             nextSampleOffset += 1 / interval.sampleRate;
 
         }
-        
+
         /* Calculate the interpolated sample value */
-        
+
         const interpolatedSampleValue = Math.round(previousSampleValue + (currentOffset - previousSampleOffset) / (nextSampleOffset - previousSampleOffset) * (nextSampleValue - previousSampleValue));
 
         /* Write the sample value */

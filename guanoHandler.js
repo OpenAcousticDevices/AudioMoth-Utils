@@ -35,7 +35,7 @@ function readUInt32LE (state) {
     const result = state.buffer.readUInt32LE(state.index);
 
     state.index += UINT32_LENGTH;
-    
+
     return result;
 
 }
@@ -58,11 +58,11 @@ function readChunk (state, id) {
 function writeString (state, string, length) {
 
     const maximumWriteLength = Math.min(string.length, length);
-    
+
     state.buffer.fill(0, state.index, state.index + length);
-    
+
     state.buffer.write(string, state.index, maximumWriteLength, 'utf8');
-    
+
     state.index += length;
 
 }
@@ -70,7 +70,7 @@ function writeString (state, string, length) {
 function writeBuffer (state, buffer) {
 
     buffer.copy(state.buffer, state.index, 0, buffer.length);
-    
+
     state.index += buffer.length;
 
 }
@@ -78,7 +78,7 @@ function writeBuffer (state, buffer) {
 function writeUInt32LE (state, value) {
 
     state.buffer.writeUInt32LE(value, state.index);
-    
+
     state.index += UINT32_LENGTH;
 
 }
@@ -86,7 +86,7 @@ function writeUInt32LE (state, value) {
 function writeChunk (state, chunk) {
 
     writeString(state, chunk.id, RIFF_ID_LENGTH);
-    
+
     writeUInt32LE(state, chunk.size);
 
 }
@@ -117,7 +117,7 @@ function readGuano (buffer, bufferSize) {
         /* Read the contents */
 
         const response = readString(state, guano.guan.size);
-        
+
         guano.contents = response.contents;
 
         guano.buffer = response.buffer;

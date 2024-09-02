@@ -11,6 +11,7 @@ const path = require('path');
 
 const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
+const filenameHandler = require('./filenameHandler.js');
 
 /* Downsample constants */
 
@@ -30,12 +31,6 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
-const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\d\.WAV$/;
-
-/* Time constants */
-
-const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
-
 /* Buffers for reading data */
 
 const inputBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
@@ -44,38 +39,18 @@ const outputBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
-/* Date functions */
-
-function digits (value, number) {
-
-    const string = '00000' + value;
-
-    return string.substr(string.length - number);
-
-}
-
-function formatFilename (timestamp) {
-
-    const date = new Date(timestamp);
-
-    let filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
-
-    filename += '.WAV';
-
-    return filename;
-
-}
-
 /* Greatest common divisor function */
 
-function greatestCommonDivider(a, b) {
+function greatestCommonDivider (a, b) {
 
-    var c;
+    let c;
 
-    while (a != 0) {
-        c = a; 
-        a = b % a;  
+    while (a !== 0) {
+
+        c = a;
+        a = b % a;
         b = c;
+
     }
 
     return b;
@@ -84,7 +59,7 @@ function greatestCommonDivider(a, b) {
 
 /* Little-endian sample read and write functions */
 
-function readInt16(buffer, index) {
+function readInt16 (buffer, index) {
 
     let value = buffer[index] + (buffer[index + 1] << 8);
 
@@ -94,7 +69,7 @@ function readInt16(buffer, index) {
 
 }
 
-function writeInt16(buffer, index, value) {
+function writeInt16 (buffer, index, value) {
 
     buffer[index] = value & 0xFF;
 
@@ -131,27 +106,16 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
     let requestedSampleRateCheck = false;
 
     for (let i = 0; i < validSampleRates.length; i += 1) {
-    
+
         if (requestedSampleRate === validSampleRates[i]) requestedSampleRateCheck = true;
-    
+
     }
 
-    if (requestedSampleRateCheck == false) {
+    if (requestedSampleRateCheck === false) {
 
         return {
             success: false,
             error: 'Requested sample rate is not valid.'
-        };
-
-    }
-
-    /* Check the input filename */
-
-    if (FILENAME_REGEX.test(path.parse(inputPath).base) === false) {
-
-        return {
-            success: false,
-            error: 'File name is incorrect.'
         };
 
     }
@@ -231,14 +195,9 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
-    if (headerCheck.success === false) {
+    if (headerCheck.success === false) return headerCheck;
 
-        return {
-            success: false,
-            error: headerCheck.error
-        };
-
-    }
+    /* Extract header */
 
     const header = headerCheck.header;
 
@@ -246,16 +205,13 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     const originalDataSize = header.data.size;
 
-    /* Check the header comment format */
+    /* Check the filename against header */
 
-    if (header.icmt.comment.search(DATE_REGEX) !== 0) {
+    const inputFilename = path.parse(inputPath).base;
 
-        return {
-            success: false,
-            error: 'Cannot find recording start time in the header comment.'
-        };
+    const filenameCheck = filenameHandler.checkFilenameAgainstHeader(filenameHandler.DOWNSAMPLE, inputFilename, header.icmt.comment, header.iart.artist);
 
-    }
+    if (filenameCheck.success === false) return filenameCheck;
 
     /* Check the original sample rate */
 
@@ -268,7 +224,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
             error: 'Requested sample rate is greater than original sample rate.'
         };
 
-    }  
+    }
 
     /* Determine settings from the input file */
 
@@ -276,11 +232,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     /* Determine timestamp of input file */
 
-    const regex = DATE_REGEX.exec(header.icmt.comment);
-
-    const timestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
-
-    const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(timestamp);
+    const outputFilename = (prefix === '' ? '' : prefix + '_') + inputFilename;
 
     /* Calculate the downsampling parameters */
 
@@ -308,7 +260,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
         /* Open the output file */
 
-        fo = fs.openSync(path.join(outputPath, filename), 'w');
+        fo = fs.openSync(path.join(outputPath, outputFilename), 'w');
 
         /* Write the header */
 
@@ -323,7 +275,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
         /* Write the data */
 
         if (numberOfSamplesToWrite > 0) {
-            
+
             let count = 0;
 
             let total = 0;
@@ -350,11 +302,11 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
                 /* Read next sample */
 
-                let currentSample = nextSample;
+                const currentSample = nextSample;
 
                 const numberOfSamplesInBuffer = numberOfSamplesRead % (FILE_BUFFER_SIZE / NUMBER_OF_BYTES_IN_SAMPLE);
 
-                if (numberOfSamplesInBuffer == 0) fs.readSync(fi, inputBuffer, 0, FILE_BUFFER_SIZE, null);
+                if (numberOfSamplesInBuffer === 0) fs.readSync(fi, inputBuffer, 0, FILE_BUFFER_SIZE, null);
 
                 if (numberOfSamplesRead < numberOfSamplesInInput) {
 
@@ -378,7 +330,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
                     /* Write a new output sample */
 
-                    if (count == sampleRateDivider) {
+                    if (count === sampleRateDivider) {
 
                         let value = total / sampleRateDivider;
 
@@ -392,7 +344,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
                         writeInt16(outputBuffer, index, value);
 
-                        if (index == FILE_BUFFER_SIZE - NUMBER_OF_BYTES_IN_SAMPLE) fs.writeSync(fo, outputBuffer, 0, FILE_BUFFER_SIZE, null);
+                        if (index === FILE_BUFFER_SIZE - NUMBER_OF_BYTES_IN_SAMPLE) fs.writeSync(fo, outputBuffer, 0, FILE_BUFFER_SIZE, null);
 
                         numberOfSamplesWritten += 1;
 
@@ -409,11 +361,11 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
                     const nextProgress = Math.round(100 * numberOfSamplesWritten / numberOfSamplesToWrite);
 
                     if (nextProgress > progress) {
-    
+
                         progress = nextProgress;
-        
+
                         if (callback) callback(progress);
-        
+
                     }
 
                 }
@@ -445,7 +397,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
                 const guanoCheck = guanoHandler.readGuano(inputBuffer, numberOfBytes);
 
                 if (guanoCheck.success) {
-                   
+
                     console.log(guanoCheck);
 
                     const guano = guanoCheck.guano;
@@ -468,7 +420,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
             }
 
-        }  
+        }
 
     } catch (e) {
 

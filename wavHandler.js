@@ -53,7 +53,7 @@ function readUInt16LE (state) {
 
 function readID (state, id) {
 
-    const result = readString (state, id.length);
+    const result = readString(state, id.length);
 
     if (result !== id) throw new Error('Could not find ' + id + ' ID.');
 
@@ -66,11 +66,11 @@ function readChunk (state, id) {
     const result = {};
 
     result.id = readString(state, RIFF_ID_LENGTH);
-    
+
     if (result.id !== id) throw new Error('Could not find ' + id.replace(' ', '') + ' chunk ID.');
 
     result.size = readUInt32LE(state);
-    
+
     return result;
 
 }

@@ -11,6 +11,7 @@ const path = require('path');
 
 const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
+const filenameHandler = require('./filenameHandler.js');
 
 /* Debug constant */
 
@@ -22,15 +23,11 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
-const FILENAME_REGEX = /^(\d{8}_)?\d{6}\.WAV$/;
-
 /* Time constants */
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
 
 const MILLISECONDS_IN_SECONDS = 1000;
-
-const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d{4})/;
 
 const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
@@ -50,13 +47,13 @@ function digits (value, number) {
 
 }
 
-function formatFilename (timestamp) {
+function formatFilename (timestamp, existingPostfix) {
 
     const date = new Date(timestamp);
 
     let filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
 
-    filename += '.WAV';
+    filename += existingPostfix + '.WAV';
 
     return filename;
 
@@ -187,17 +184,6 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     }
 
-    /* Check the input filename */
-
-    if (FILENAME_REGEX.test(path.parse(inputPath).base) === false) {
-
-        return {
-            success: false,
-            error: 'File name is incorrect.'
-        };
-
-    }
-
     /* Open input file */
 
     let fi;
@@ -273,37 +259,31 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
-    if (headerCheck.success === false) {
+    if (headerCheck.success === false) return headerCheck;
 
-        return {
-            success: false,
-            error: headerCheck.error
-        };
-
-    }
+    /* Extract the header */
 
     const header = headerCheck.header;
 
-    /* Check the header comment format */
+    /* Check the filename against header */
 
-    if (header.icmt.comment.search(DATE_REGEX) !== 0) {
+    const inputFilename = path.parse(inputPath).base;
 
-        return {
-            success: false,
-            error: 'Cannot find recording start time in the header comment.'
-        };
+    const filenameCheck = filenameHandler.checkFilenameAgainstHeader(filenameHandler.SPLIT, inputFilename, header.icmt.comment, header.iart.artist);
 
-    }
+    if (filenameCheck.success === false) return filenameCheck;
+
+    /* Extract original timestamp and existing prefix and postfix */
+
+    const existingPostfix = filenameCheck.existingPostfix;
+
+    const existingPrefix = filenameCheck.existingPrefix;
+
+    const originalTimestamp = filenameCheck.originalTimestamp;
 
     /* Determine settings from the input file */
 
     const inputFileDataSize = header.data.size;
-
-    /* Determine timestamp of input file */
-
-    const regex = DATE_REGEX.exec(header.icmt.comment);
-
-    const originalTimestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
 
     /* Make the initial empty output file list */
 
@@ -372,7 +352,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
                 }
 
             }
-    
+
         } catch (e) {
 
             guano = null;
@@ -381,7 +361,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
         }
 
-    }        
+    }
 
     /* Write the output files */
 
@@ -391,20 +371,20 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
         if (outputFileList.length === 1 && outputFileList[0].offset === 0 && outputFileList[0].length === inputFileDataSize) {
 
-            const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp);
+            const filename = (prefix === '' ? '' : prefix + '_') + existingPrefix + formatFilename(originalTimestamp, existingPostfix);
 
-            const outputCallback = function(value) {
+            const outputCallback = function (value) {
 
                 const nextProgress = Math.round(100 * value);
 
                 if (nextProgress > progress) {
 
                     progress = nextProgress;
-    
+
                     if (callback) callback(progress);
-    
+
                 }
-    
+
             };
 
             writeOutputFile(fi, path.join(outputPath, filename), header, guano, null, null, 0, inputFileDataSize, outputCallback);
@@ -417,22 +397,22 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
                 const comment = 'Split from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
 
-                const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp);
+                const filename = (prefix === '' ? '' : prefix + '_') + existingPrefix + formatFilename(outputFileList[i].timestamp, existingPostfix);
 
                 const newContents = contents ? contents.replace(TIMESTAMP_REGEX, formatTimestamp(outputFileList[i].timestamp)) : null;
 
-                const outputCallback = function(value) {
+                const outputCallback = function (value) {
 
                     const nextProgress = Math.round(100 * (i + value) / outputFileList.length);
-    
+
                     if (nextProgress > progress) {
-    
+
                         progress = nextProgress;
-        
+
                         if (callback) callback(progress);
-        
+
                     }
-        
+
                 };
 
                 writeOutputFile(fi, path.join(outputPath, filename), header, guano, comment, newContents, outputFileList[i].offset, outputFileList[i].length, outputCallback);

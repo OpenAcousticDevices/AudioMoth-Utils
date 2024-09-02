@@ -11,6 +11,7 @@ const path = require('path');
 
 const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
+const filenameHandler = require('./filenameHandler.js');
 
 /* Debug constant */
 
@@ -28,15 +29,11 @@ const FILE_BUFFER_SIZE = 32 * 1024;
 
 const UINT32_SIZE_IN_BITS = 32;
 
-const FILENAME_REGEX = /^(\d\d\d\d\d\d\d\d_)?\d\d\d\d\d\dT\.WAV$/;
-
 /* Time constants */
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
 
 const MILLISECONDS_IN_SECONDS = 1000;
-
-const DATE_REGEX = /^Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
 
 const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
@@ -52,7 +49,7 @@ const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 function isFullOfZeros (buffer, length) {
 
-    var i, value;
+    let i, value;
 
     for (i = 0; i < length / NUMBER_OF_BYTES_IN_SAMPLE; i += 1) {
 
@@ -70,7 +67,7 @@ function isFullOfZeros (buffer, length) {
 
 function readEncodedBlock (buffer) {
 
-    var i, value, numberOfBlocks;
+    let i, value, numberOfBlocks;
 
     numberOfBlocks = 0;
 
@@ -110,7 +107,7 @@ function readEncodedBlock (buffer) {
 
 function digits (value, number) {
 
-    var string = '00000' + value;
+    const string = '00000' + value;
 
     return string.substr(string.length - number);
 
@@ -118,9 +115,9 @@ function digits (value, number) {
 
 function formatFilename (timestamp, milliseconds) {
 
-    var date, filename;
+    let filename;
 
-    date = new Date(timestamp);
+    const date = new Date(timestamp);
 
     filename = date.getUTCFullYear() + digits(date.getUTCMonth() + 1, 2) + digits(date.getUTCDate(), 2) + '_' + digits(date.getUTCHours(), 2) + digits(date.getUTCMinutes(), 2) + digits(date.getUTCSeconds(), 2);
 
@@ -314,17 +311,6 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
     }
 
-    /* Check the input filename */
-
-    if (FILENAME_REGEX.test(path.parse(inputPath).base) === false) {
-
-        return {
-            success: false,
-            error: 'File name is incorrect.'
-        };
-
-    }
-
     /* Open input file */
 
     let fi;
@@ -400,27 +386,25 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
     const headerCheck = wavHandler.readHeader(headerBuffer, fileSize);
 
-    if (headerCheck.success === false) {
+    if (headerCheck.success === false) return headerCheck;
 
-        return {
-            success: false,
-            error: headerCheck.error
-        };
-
-    }
+    /* Extract header */
 
     const header = headerCheck.header;
 
-    /* Check the header comment format */
+    /* Check the filename against header */
 
-    if (DATE_REGEX.test(header.icmt.comment) === false) {
+    const inputFilename = path.parse(inputPath).base;
 
-        return {
-            success: false,
-            error: 'Cannot find recording start time in the header comment.'
-        };
+    const filenameCheck = filenameHandler.checkFilenameAgainstHeader(filenameHandler.EXPAND, inputFilename, header.icmt.comment, header.iart.artist);
 
-    }
+    if (filenameCheck.success === false) return filenameCheck;
+
+    /* Extract original timestamp and existing prefix */
+
+    const existingPrefix = filenameCheck.existingPrefix;
+
+    const originalTimestamp = filenameCheck.originalTimestamp;
 
     /* Determine settings from the input file */
 
@@ -539,7 +523,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
             const nextProgress = Math.round(50 * inputFileBytesRead / inputFileDataSize);
 
-            if (nextProgress != progress) {
+            if (nextProgress !== progress) {
 
                 progress = nextProgress;
 
@@ -583,12 +567,6 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
         if (DEBUG) console.log(fileSummary[i]);
 
     }
-
-    /* Determine timestamp of input file */
-
-    const regex = DATE_REGEX.exec(header.icmt.comment);
-
-    const originalTimestamp = Date.UTC(regex[6], regex[5] - 1, regex[4], regex[1], regex[2], regex[3]);
 
     /* Make the initial empty output file list */
 
@@ -765,7 +743,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
                 }
 
             }
-    
+
         } catch (e) {
 
             guano = null;
@@ -774,7 +752,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
         }
 
-    }  
+    }
 
     /* Write the output files */
 
@@ -782,20 +760,20 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
         if (outputFileList.length === 1 && outputFileList[0].offset === 0 && outputFileList[0].length === totalOutputBytes) {
 
-            const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(originalTimestamp, false);
+            const filename = (prefix === '' ? '' : prefix + '_') + existingPrefix + formatFilename(originalTimestamp, false);
 
-            const outputCallback = function(value) {
+            const outputCallback = function (value) {
 
                 const nextProgress = 50 + Math.round(50 * value);
 
                 if (nextProgress > progress) {
 
                     progress = nextProgress;
-    
+
                     if (callback) callback(progress);
-    
+
                 }
-    
+
             };
 
             writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, guano, null, null, 0, totalOutputBytes, outputCallback);
@@ -806,22 +784,22 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
                 const comment = 'Expanded from ' + path.basename(inputPath) + ' as file ' + (i + 1) + ' of ' + outputFileList.length + '.';
 
-                const filename = (prefix === '' ? '' : prefix + '_') + formatFilename(outputFileList[i].timestamp, outputFileList[i].milliseconds);
+                const filename = (prefix === '' ? '' : prefix + '_') + existingPrefix + formatFilename(outputFileList[i].timestamp, outputFileList[i].milliseconds);
 
                 const newContents = contents ? contents.replace(TIMESTAMP_REGEX, formatTimestamp(outputFileList[i].timestamp, outputFileList[i].milliseconds)) : null;
 
-                const outputCallback = function(value) {
+                const outputCallback = function (value) {
 
                     const nextProgress = 50 + Math.round(50 * (i + value) / outputFileList.length);
-    
+
                     if (nextProgress > progress) {
-    
+
                         progress = nextProgress;
-        
+
                         if (callback) callback(progress);
-        
+
                     }
-        
+
                 };
 
                 writeOutputFile(fi, fileSummary, path.join(outputPath, filename), header, guano, comment, newContents, outputFileList[i].offset, outputFileList[i].length, outputCallback);
