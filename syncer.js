@@ -43,7 +43,7 @@ const MICROSECONDS_IN_SECOND = 1000 * MILLISECONDS_IN_SECOND;
 
 /* PPS accuracy constants */
 
-const MAX_HFXO_ERROR_ABSOLUTE = 100 / 1000000;
+const MAX_HFXO_ERROR_ABSOLUTE = 1000 / 1000000;
 
 const MAX_HFXO_ERROR_RELATIVE = 40 / 1000000;
 
@@ -364,14 +364,28 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     /* Check for missing buffers */
 
+    let bufferOverflow = false;
+
+    let numberOfRowsToProcess = numberOfRows;
+
     for (let i = 0; i < numberOfRows; i += 1) {
 
         if (BUFFERS_FILLED[i] - BUFFERS_WRITTEN[i] >= NUMBER_OF_BUFFERS) {
 
-            return {
-                success: false,
-                error: 'Input CSV file shows evidence of recording buffer overflow.'
-            };
+            bufferOverflow = true;
+
+            numberOfRowsToProcess = Math.max(0, i - 1);
+
+            if (autoResolve === false) {
+
+                return {
+                    success: false,
+                    error: 'Input CSV file shows evidence of recording buffer overflow.'
+                };
+
+            }
+
+            break;
 
         }
 
@@ -429,7 +443,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     try {
 
-        for (let i = 1; i < numberOfRows; i += 1) {
+        for (let i = 1; i < numberOfRowsToProcess; i += 1) {
 
             /* Read next time and sample values */
 
@@ -596,6 +610,14 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
+    if (bufferOverflow) {
+
+        autoResolveText += 'BUFFER OVERFLOW DETECTED\n------------------------\n';
+
+        autoResolveText += 'Stopped processing from PPS number ' + (numberOfRowsToProcess - 1) + '.\n\n';
+
+    }
+
     if (missedPPSEvent) {
 
         autoResolveText += 'MISSED PPS EVENTS\n-----------------\n';
@@ -610,9 +632,9 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         }
 
-    }
+        autoResolveText += '\n';
 
-    if (missedPPSEvent && misalignedPPSEvent) autoResolveText += '\n';
+    }
 
     if (misalignedPPSEvent) {
 
@@ -627,6 +649,8 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
             }
 
         }
+
+        autoResolveText += '\n';
 
     }
 
@@ -868,10 +892,8 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
         if (sampleRateDifference !== 0) {
 
-            if (unusualSampleRate === false) {
-
-                if (missedPPSEvent || misalignedPPSEvent) autoResolveText += '\n';
-
+            if (unusualSampleRate == false) {
+                
                 autoResolveText += 'UNUSUAL SAMPLE RATE\n-------------------\n';
 
             }
@@ -913,7 +935,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
-    if (missedPPSEvent || misalignedPPSEvent || unusualSampleRate) {
+    if (bufferOverflow || missedPPSEvent || misalignedPPSEvent || unusualSampleRate) {
 
         const fo = fs.openSync(path.join(outputPath, outputFilename.replace('.WAV', '.TXT')), 'w');
 
@@ -939,13 +961,23 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     }
 
+    /* Calculate input parameters */
+
+    let maximumNumberOfSamplesToRead = Math.floor(inputFileDataSize / NUMBER_OF_BYTES_IN_SAMPLE);
+
     /* Calculate output parameters */
 
     let targetSampleRate = sampleRate;
 
-    const maximumNumberOfSamplesToRead = Math.floor(inputFileDataSize / NUMBER_OF_BYTES_IN_SAMPLE);
+    let numberOfSamplesToWrite = 0;
 
-    let numberOfSamplesToWrite = maximumNumberOfSamplesToRead;
+    for (let i = 0; i < numberOfIntervals; i += 1) {
+
+        const interval = intervals[i];
+
+        numberOfSamplesToWrite += interval.timeInterval * targetSampleRate;
+
+    }
 
     /* Check if resample required */
 
