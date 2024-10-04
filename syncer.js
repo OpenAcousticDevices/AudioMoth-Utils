@@ -1198,11 +1198,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
             /* Write the sample value */
 
-            if (numberOfSamplesWritten < numberOfSamplesToWrite) {
-
-                writeSampleValue(interpolatedSampleValue);
-
-            }
+            writeSampleValue(interpolatedSampleValue);
 
         }
 
@@ -1227,58 +1223,6 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
             progress = newProgress;
 
         }
-
-    }
-
-    /* Write the remaining output values */
-
-    let currentOffset = 0;
-
-    const interval = intervals[numberOfIntervals - 1];
-
-    let previousSampleOffset = -interval.lastSampleGap / MICROSECONDS_IN_SECOND;
-
-    let nextSampleOffset = previousSampleOffset + 1 / interval.sampleRate;
-
-    while (numberOfSamplesWritten < numberOfSamplesToWrite) {
-
-        while (currentOffset > nextSampleOffset) {
-
-            /* Update previous sample values */
-
-            previousSampleOffset = nextSampleOffset;
-
-            previousSampleValue = nextSampleValue;
-
-            /* Read the next sample value */
-
-            if (numberOfSamplesRead < maximumNumberOfSamplesToRead) {
-
-                nextSampleValue = readSampleValue();
-
-            }
-
-            /* Update the next sample offset */
-
-            nextSampleOffset += 1 / interval.sampleRate;
-
-        }
-
-        /* Calculate the interpolated sample value */
-
-        const interpolatedSampleValue = Math.round(previousSampleValue + (currentOffset - previousSampleOffset) / (nextSampleOffset - previousSampleOffset) * (nextSampleValue - previousSampleValue));
-
-        /* Write the sample value */
-
-        if (numberOfSamplesWritten < numberOfSamplesToWrite) {
-
-            writeSampleValue(interpolatedSampleValue);
-
-        }
-
-        /* Update current offset */
-
-        currentOffset += 1 / targetSampleRate;
 
     }
 

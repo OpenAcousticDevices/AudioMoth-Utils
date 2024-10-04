@@ -11,6 +11,7 @@ const path = require('path');
 
 const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
+const filenameHandler = require('./filenameHandler.js');
 
 /* Expansion constants */
 
@@ -24,9 +25,12 @@ const UINT32_SIZE_IN_BITS = 32;
 
 /* Regex constants */
 
-const FILENAME_REGEXES = [/^([0-9a-zA-Z_]+_)?\d{8}_\d{6}(_\d{3})?\.WAV$/,
-    /^(\d{8}_)?\d{6}T\.WAV$/,
-    /^([0-9a-zA-Z_]+_)?\d{8}_\d{6}_SYNC\.WAV$/];
+const VALID_FILENAME_OPERATIONS = [
+    filenameHandler.SPLIT,
+    filenameHandler.DOWNSAMPLE,
+    filenameHandler.EXPAND,
+    filenameHandler.SYNC
+];
 
 const TIMESTAMP_REGEX = /Recorded at (\d\d:\d\d:\d\d(\.\d{3})? \d\d\/\d\d\/\d{4}) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
 
@@ -44,7 +48,7 @@ const GUANO_LOCATION_REGEX_2 = /Loc Position:(\-?\d{1,2}\.\d{2}) (\-?\d{1,3}\.\d
 
 const GUANO_LOCATION_REGEX_6 = /Loc Position:(\-?\d{1,2}\.\d{6}) (\-?\d{1,3}\.\d{6})/;
 
-const GUANO_TIMESTAMP_REGEX = /Timestamp:(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:Z|(?:[\+\-]\d\d:\d\d)))/;
+const GUANO_TIMESTAMP_REGEX = /Timestamp:(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:(\.\d{3})?)(?:Z|(?:[\+\-]\d\d:\d\d)))/;
 
 const GUANO_TEMPERATURE_REGEX = /Temperature Int:(\-?\d+\.\d)/;
 
@@ -255,21 +259,19 @@ function summarise (folderPath, filePath, callback) {
 
     /* Check the input filename */
 
-    const filename = path.parse(filePath).base;
-
     let valid = false;
 
-    for (let i = 0; i < FILENAME_REGEXES.length; i += 1) {
+    const filename = path.parse(filePath).base;
 
-        valid = valid || FILENAME_REGEXES[i].test(filename);
+    for (let i = 0; i < VALID_FILENAME_OPERATIONS.length; i += 1) {
 
-    }
+        const regex = filenameHandler.getFilenameRegex(VALID_FILENAME_OPERATIONS[i]);
 
-    if (valid === false) {
-
-        return false;
+        valid = valid || regex.test(filename);
 
     }
+
+    if (valid === false) return false;
 
     /* Extract folder name */
 
@@ -401,7 +403,7 @@ function summarise (folderPath, filePath, callback) {
 
     /* Is triggered */
 
-    triggered = !!TRIGGER_REGEX.test(filename);
+    triggered = TRIGGER_REGEX.test(filename);
 
     /* Count samples */
 

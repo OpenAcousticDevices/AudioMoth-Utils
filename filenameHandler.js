@@ -15,13 +15,18 @@ const SYNC = 3;
 
 /* Filename and dates regexes */
 
-const regexes = [/^([A-Za-z-_0-9]+_)?(\d{8}_\d{6})(_SYNC)?\.WAV$/,
+const regexes = [
     /^([A-Za-z-_0-9]+_)?(\d{8}_\d{6})(_SYNC)?\.WAV$/,
+    /^([A-Za-z-_0-9]+_)?(\d{8}_\d{6})((_\d{3})|(_SYNC))?\.WAV$/,
     /^([0-9A-F]{16}_)?((\d{8}_)?\d{6})T\.WAV$/,
     /^([0-9A-F]{16}_)?(\d{8}_\d{6})\.WAV$/
 ];
 
 const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
+
+const DOWNSAMPLE_TIMESTRING_REGEX = /(\d{8}_\d{6}_\d{3})\.WAV$/;
+
+const POSTFIX_REGEX = /_SYNC\.WAV$/;
 
 /* Public functions */
 
@@ -48,7 +53,15 @@ function checkFilenameAgainstHeader (type, filename, comment, deviceID) {
 
     /* Extract filename time string */
 
-    const originalTimestring = matches[2];
+    let originalTimestring = matches[2];
+
+    if (type === DOWNSAMPLE) {
+
+        const downsampleMatches = filename.match(DOWNSAMPLE_TIMESTRING_REGEX);
+
+        if (downsampleMatches) originalTimestring = downsampleMatches[1];
+        
+    }
 
     /* Check existing prefix */
 
@@ -75,7 +88,7 @@ function checkFilenameAgainstHeader (type, filename, comment, deviceID) {
 
     /* Check existing postfix */
 
-    const existingPostfix = (type === SPLIT || type === DOWNSAMPLE) && matches[3] ? matches[3] : '';
+    const existingPostfix = (type === SPLIT || type === DOWNSAMPLE) && POSTFIX_REGEX.test(filename) ? '_SYNC' : '';
 
     /* Check time against comments field */
 
