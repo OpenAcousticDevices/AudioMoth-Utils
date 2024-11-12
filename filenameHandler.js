@@ -22,7 +22,7 @@ const regexes = [
     /^([0-9A-F]{16}_)?(\d{8}_\d{6})\.WAV$/
 ];
 
-const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d)/;
+const DATE_REGEX = /Recorded at (\d\d):(\d\d):(\d\d) (\d\d)\/(\d\d)\/(\d\d\d\d) \(UTC([-|+]\d+)?:?(\d\d)?\)/;
 
 const DOWNSAMPLE_TIMESTRING_REGEX = /(\d{8}_\d{6}_\d{3})\.WAV$/;
 
@@ -134,7 +134,7 @@ function checkFilenameAgainstHeader (type, filename, comment, deviceID) {
 
 }
 
-/* Export functions */
+/* Exports */
 
 exports.getFilenameRegex = getFilenameRegex;
 exports.checkFilenameAgainstHeader = checkFilenameAgainstHeader;

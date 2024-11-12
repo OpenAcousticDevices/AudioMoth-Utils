@@ -21,13 +21,15 @@ const DEBUG = false;
 
 const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
+const HEADER_BUFFER_SIZE = 32 * 1024;
+
 const FILE_BUFFER_SIZE = 32 * 1024;
 
 /* Time constants */
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
 
-const MILLISECONDS_IN_SECONDS = 1000;
+const MILLISECONDS_IN_SECOND = 1000;
 
 const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
@@ -35,7 +37,7 @@ const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
 const fileBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
-const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
+const headerBuffer = Buffer.alloc(HEADER_BUFFER_SIZE);
 
 /* Date functions */
 
@@ -85,7 +87,7 @@ function writeOutputFile (fi, outputPath, header, guano, comment, contents, offs
 
         console.log('Length: ' + length);
 
-        console.log('Duration: ' + Math.round(length / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECONDS));
+        console.log('Duration: ' + Math.round(length / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECOND));
 
     }
 
@@ -309,7 +311,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
             length: numberOfBytes
         });
 
-        timestamp += maximumFileDuration * MILLISECONDS_IN_SECONDS;
+        timestamp += maximumFileDuration * MILLISECONDS_IN_SECOND;
 
         numberOfBytesProcessed += numberOfBytes;
 
@@ -329,7 +331,7 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     if (header.data.size + header.size < fileSize) {
 
-        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, FILE_BUFFER_SIZE);
+        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, HEADER_BUFFER_SIZE);
 
         try {
 
@@ -423,11 +425,9 @@ function split (inputPath, outputPath, prefix, maximumFileDuration, callback) {
 
     } catch (e) {
 
-        console.log(e);
-
         return {
             success: false,
-            error: 'Error occurred while splitting files. ' + e
+            error: 'An error occurred while splitting files. '
         };
 
     }

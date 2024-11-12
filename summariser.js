@@ -56,7 +56,7 @@ const GUANO_VOLTAGE_REGEX = /OAD\|Battery Voltage:(\d\.\d)/;
 
 /* Time constants */
 
-const MILLISECONDS_IN_SECONDS = 1000;
+const MILLISECONDS_IN_SECOND = 1000;
 
 /* Buffers for reading data */
 
@@ -241,7 +241,7 @@ function finalise (outputPath) {
 
         return {
             success: false,
-            error: 'Error writing output file.'
+            error: 'An error occurred while writing the output file.'
         };
 
     }
@@ -373,7 +373,7 @@ function summarise (folderPath, filePath, callback) {
 
             const hours = parseInt(timestampMatch[3], 10);
 
-            timestamp += hours >= 0 ? '+' : '-';
+            timestamp += timestampMatch[3].includes('+') ? '+' : '-';
 
             timestamp += digits(Math.abs(hours), 2);
 
@@ -503,13 +503,13 @@ function summarise (folderPath, filePath, callback) {
 
     /* Calculate duration */
 
-    duration = sampleRate !== undefined && sampleRate !== null ? Math.round(samples / sampleRate * MILLISECONDS_IN_SECONDS) / MILLISECONDS_IN_SECONDS : null;
+    duration = sampleRate !== undefined && sampleRate !== null ? Math.round(samples / sampleRate * MILLISECONDS_IN_SECOND) / MILLISECONDS_IN_SECOND : null;
 
     /* Determine temperature */
 
     if (TEMPERATURE_REGEX.test(comment)) {
 
-        temperature = comment.match(TEMPERATURE_REGEX)[1] ? comment.match(TEMPERATURE_REGEX)[1] : null;
+        temperature = comment.match(TEMPERATURE_REGEX) ? comment.match(TEMPERATURE_REGEX)[1] : null;
 
     }
 
@@ -517,7 +517,7 @@ function summarise (folderPath, filePath, callback) {
 
     if (BATTERY_REGEX.test(comment)) {
 
-        voltage = comment.match(BATTERY_GREATER_THAN_REGEX) ? '5.0' : comment.match(BATTERY_LESS_THAN_REGEX) ? '2.4' : comment.match(BATTERY_REGEX)[1] ? comment.match(BATTERY_REGEX)[1] : null;
+        voltage = comment.match(BATTERY_GREATER_THAN_REGEX) ? '5.0' : comment.match(BATTERY_LESS_THAN_REGEX) ? '2.4' : comment.match(BATTERY_REGEX) ? comment.match(BATTERY_REGEX)[1] : null;
 
     }
 
@@ -625,7 +625,7 @@ function summarise (folderPath, filePath, callback) {
 
 }
 
-/* Export split */
+/* Exports */
 
 exports.initialise = initialise;
 exports.summarise = summarise;

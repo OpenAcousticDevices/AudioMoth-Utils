@@ -1018,7 +1018,7 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
     if (header.data.size + header.size < fileSize) {
 
-        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, FILE_BUFFER_SIZE);
+        const numberOfBytes = Math.min(fileSize - header.size - header.data.size, HEADER_BUFFER_SIZE);
 
         try {
 
@@ -1263,6 +1263,6 @@ function sync (inputPath, outputPath, prefix, resampleRate, autoResolve, callbac
 
 }
 
-/* Export sync */
+/* Exports */
 
 exports.sync = sync;

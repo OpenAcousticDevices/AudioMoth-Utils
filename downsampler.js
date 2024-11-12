@@ -31,13 +31,15 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
+const HEADER_BUFFER_SIZE = 32 * 1024;
+
 /* Buffers for reading data */
 
 const inputBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 const outputBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
-const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
+const headerBuffer = Buffer.alloc(HEADER_BUFFER_SIZE);
 
 /* Greatest common divisor function */
 
@@ -384,7 +386,7 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
         if (originalDataSize + originalHeaderSize < fileSize) {
 
-            const numberOfBytes = Math.min(fileSize - originalHeaderSize - originalDataSize, FILE_BUFFER_SIZE);
+            const numberOfBytes = Math.min(fileSize - originalHeaderSize - originalDataSize, HEADER_BUFFER_SIZE);
 
             /* Read end of file into the buffer */
 
@@ -397,8 +399,6 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
                 const guanoCheck = guanoHandler.readGuano(inputBuffer, numberOfBytes);
 
                 if (guanoCheck.success) {
-
-                    console.log(guanoCheck);
 
                     const guano = guanoCheck.guano;
 
@@ -424,11 +424,9 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
     } catch (e) {
 
-        console.log(e);
-
         return {
             success: false,
-            error: 'Error occurred while downsampling files. ' + e
+            error: 'An error occurred while downsampling the file. '
         };
 
     }
@@ -450,6 +448,6 @@ function downsample (inputPath, outputPath, prefix, requestedSampleRate, callbac
 
 }
 
-/* Export downsample */
+/* Exports */
 
 exports.downsample = downsample;

@@ -27,13 +27,15 @@ const NUMBER_OF_BYTES_IN_SAMPLE = 2;
 
 const FILE_BUFFER_SIZE = 32 * 1024;
 
+const HEADER_BUFFER_SIZE = 32 * 1024;
+
 const UINT32_SIZE_IN_BITS = 32;
 
 /* Time constants */
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
 
-const MILLISECONDS_IN_SECONDS = 1000;
+const MILLISECONDS_IN_SECOND = 1000;
 
 const TIMESTAMP_REGEX = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/;
 
@@ -43,7 +45,7 @@ const fileBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
 const blankBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
 
-const headerBuffer = Buffer.alloc(FILE_BUFFER_SIZE);
+const headerBuffer = Buffer.alloc(HEADER_BUFFER_SIZE);
 
 /* Check for silent buffer */
 
@@ -157,7 +159,7 @@ function writeOutputFile (fi, fileSummary, outputPath, header, guano, comment, c
 
         console.log('Length: ' + length);
 
-        console.log('Duration: ' + Math.round(length / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECONDS));
+        console.log('Duration: ' + Math.round(length / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECOND));
 
     }
 
@@ -537,7 +539,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
         return {
             success: false,
-            error: 'Error occurred while processing input file. ' + e
+            error: 'An error occurred while processing the input file. '
         };
 
     }
@@ -615,7 +617,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
             }
 
-            timestamp += maximumFileDuration * MILLISECONDS_IN_SECONDS;
+            timestamp += maximumFileDuration * MILLISECONDS_IN_SECOND;
 
             numberOfBytesProcessed += numberOfBytes;
 
@@ -685,7 +687,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
             /* Determine time offset */
 
-            const timeOffset = Math.round(numberOfBytesProcessed / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECONDS);
+            const timeOffset = Math.round(numberOfBytesProcessed / header.wavFormat.samplesPerSecond / NUMBER_OF_BYTES_IN_SAMPLE * MILLISECONDS_IN_SECOND);
 
             /* Add the output file */
 
@@ -720,7 +722,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
     if (inputFileDataSize + inputFileHeaderSize < fileSize) {
 
-        const numberOfBytes = Math.min(fileSize - inputFileHeaderSize - inputFileDataSize, FILE_BUFFER_SIZE);
+        const numberOfBytes = Math.min(fileSize - inputFileHeaderSize - inputFileDataSize, HEADER_BUFFER_SIZE);
 
         try {
 
@@ -812,7 +814,7 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
         return {
             success: false,
-            error: 'Error occurred while processing duration-based output files. ' + e
+            error: 'An error occurred while processing the duration-based output files. '
         };
 
     }
@@ -832,6 +834,6 @@ function expand (inputPath, outputPath, prefix, expansionType, maximumFileDurati
 
 }
 
-/* Export expand */
+/* Exports */
 
 exports.expand = expand;
