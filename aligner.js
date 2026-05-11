@@ -51,7 +51,7 @@ const TIMESTAMP_REGEX = /(\d\d)\/(\d\d)\/(\d{4}) (\d\d):(\d\d):(\d\d)\.(\d{3})/;
 
 const TIME_SET_REGEX = /(\d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d\.\d{3}) UTC: Time was set from GPS\./;
 
-const TIME_UPDATED_REGEX = /(\d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d\.\d{3}) UTC: Time was updated\. The internal clock was (\d+)ms (fast|slow)\./;
+const TIME_UPDATED_REGEX = /(\d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d\.\d{3}) UTC: Time was updated\. The internal clock was (\d+(\.\d)?)ms (fast|slow)\./;
 
 const TIME_NOT_UPDATED_REGEX = /(\d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d\.\d{3}) UTC: Time was not updated\. The internal clock was correct\./;
 
@@ -307,13 +307,15 @@ function processLine(line) {
 
             currentFix.timestamp += MILLISECONDS_IN_SECOND;
             
-            let timeOffset = TIME_OFFSET_MULTIPLIER * parseInt(timeUpdatedMatch[2], 10);
+            let timeOffset = TIME_OFFSET_MULTIPLIER * parseFloat(timeUpdatedMatch[2], 10);
 
-            timeOffset *= timeUpdatedMatch[3] === 'fast' ? -1 : 1;
+            timeOffset *= timeUpdatedMatch[4] === 'fast' ? -1 : 1;
 
-            if (timeOffset > 0) timeOffset += TIME_OFFSET_MULTIPLIER / 2;
+            const roundingCorrection = timeUpdatedMatch[3] ? TIME_OFFSET_MULTIPLIER / 20 : TIME_OFFSET_MULTIPLIER / 2;
 
-            if (timeOffset < 0) timeOffset -= TIME_OFFSET_MULTIPLIER / 2;
+            if (timeOffset > 0) timeOffset += roundingCorrection;
+
+            if (timeOffset < 0) timeOffset -= roundingCorrection;
 
             currentFix.timeOffset = timeOffset;
 

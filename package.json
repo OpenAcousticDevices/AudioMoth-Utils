@@ -1,6 +1,6 @@
 {
   "name": "audiomoth-utils",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Module of utilities for use with AudioMoth and recordings created by AudioMoth.",
   "author": {
     "name": "openacousticdevices.info"
