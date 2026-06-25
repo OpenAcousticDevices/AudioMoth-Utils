@@ -13,6 +13,12 @@ const wavHandler = require('./wavHandler.js');
 const guanoHandler = require('./guanoHandler.js');
 const filenameHandler = require('./filenameHandler.js');
 
+/* Resampling options */
+
+const INTERPOLATION = 0;
+
+const NEAREST_NEIGHBOUR = 1;
+
 /* Results constants */
 
 const FIX_IDENTIFIER = "FIX";
@@ -607,7 +613,7 @@ function finalise (outputPath) {
 
 /* Align a WAV file from the standard firmware */
 
-function align (inputPath, outputPath, prefix, onlyProcessFilesBetweenFixes, callback) {
+function align (inputPath, outputPath, prefix, algorithm, onlyProcessFilesBetweenFixes, callback) {
 
     /* Check prefix parameter */
 
@@ -618,6 +624,17 @@ function align (inputPath, outputPath, prefix, onlyProcessFilesBetweenFixes, cal
         return {
             success: false,
             error: 'Filename prefix must be a string.'
+        };
+
+    }
+
+    /* Check algorithm parameter */
+
+    if (algorithm !== INTERPOLATION && algorithm !== NEAREST_NEIGHBOUR) {
+
+        return {
+            success: false,
+            error: 'Algorithm must be INTERPOLATION or NEAREST_NEIGHBOUR.'
         };
 
     }
@@ -1170,12 +1187,28 @@ function align (inputPath, outputPath, prefix, onlyProcessFilesBetweenFixes, cal
 
             /* Write the sample value */
 
-            let interpolatedSampleValue = previousSampleValue + Math.round((outputOffset - previousInputOffset) / (inputOffset - previousInputOffset) * (sampleValue - previousSampleValue));
+            if (algorithm == INTERPOLATION) {
 
-            if (inputOffset === previousInputOffset) interpolatedSampleValue = previousSampleValue;
+                let interpolatedSampleValue = previousSampleValue + Math.round((outputOffset - previousInputOffset) / (inputOffset - previousInputOffset) * (sampleValue - previousSampleValue));
 
-            writeSampleValue(interpolatedSampleValue);     
-            
+                if (inputOffset === previousInputOffset) interpolatedSampleValue = previousSampleValue;
+
+                writeSampleValue(interpolatedSampleValue);     
+
+            } else {
+
+                if (inputOffset - outputOffset < inputOffsetStep / 2) {
+
+                    writeSampleValue(sampleValue);   
+
+                } else {
+
+                    writeSampleValue(previousSampleValue);   
+
+                }
+
+            }
+
             /* Increment output offset and counter */
 
             outputOffset += 1 / sampleRate;
@@ -1240,6 +1273,9 @@ function align (inputPath, outputPath, prefix, onlyProcessFilesBetweenFixes, cal
 }
 
 /* Exports */
+
+exports.INTERPOLATION = INTERPOLATION;
+exports.NEAREST_NEIGHBOUR = NEAREST_NEIGHBOUR;
 
 exports.initialise = initialise;
 exports.align = align;

@@ -23,6 +23,12 @@ const FIX_PPS_EVENTS = true;
 
 const ALIGN_SAMPLES = true;
 
+/* Resampling options */
+
+const INTERPOLATION = 0;
+
+const NEAREST_NEIGHBOUR = 1;
+
 /* File buffer constants */
 
 const UINT32_MAX = 0xFFFFFFFF;
@@ -163,7 +169,7 @@ function writeInt16 (buffer, index, value) {
 
 /* Sync a WAV file from the AudioMoth-GPS-Sync firmware */
 
-function sync (inputPath, outputPath, prefix, resampleRate, resolveWAV, resolveGPS, callback) {
+function sync (inputPath, outputPath, prefix, algorithm, resampleRate, resolveWAV, resolveGPS, callback) {
 
     /* Check prefix parameter */
 
@@ -174,6 +180,17 @@ function sync (inputPath, outputPath, prefix, resampleRate, resolveWAV, resolveG
         return {
             success: false,
             error: 'Filename prefix must be a string.'
+        };
+
+    }
+
+    /* Check algorithm parameter */
+
+    if (algorithm !== INTERPOLATION && algorithm !== NEAREST_NEIGHBOUR) {
+
+        return {
+            success: false,
+            error: 'Algorithm must be INTERPOLATION or NEAREST_NEIGHBOUR.'
         };
 
     }
@@ -1430,13 +1447,29 @@ function sync (inputPath, outputPath, prefix, resampleRate, resolveWAV, resolveG
 
                     }
 
-                    /* Calculate the interpolated sample value */
+                    if (algorithm == INTERPOLATION) {
 
-                    const interpolatedSampleValue = Math.round(previousSampleValue + (currentOffset - previousSampleOffset) / (nextSampleOffset - previousSampleOffset) * (nextSampleValue - previousSampleValue));
+                        /* Calculate the interpolated sample value */
 
-                    /* Write the sample value */
+                        const interpolatedSampleValue = Math.round(previousSampleValue + (currentOffset - previousSampleOffset) / (nextSampleOffset - previousSampleOffset) * (nextSampleValue - previousSampleValue));
 
-                    writeSampleValue(interpolatedSampleValue);
+                        /* Write the sample value */
+
+                        writeSampleValue(interpolatedSampleValue);
+
+                    } else {
+
+                        if (nextSampleOffset - currentOffset < 0.5 / interval.sampleRate) {
+
+                            writeSampleValue(nextSampleValue);   
+
+                        } else {
+
+                            writeSampleValue(previousSampleValue);   
+
+                        }
+
+                    }
 
                 }
 
@@ -1579,5 +1612,8 @@ function sync (inputPath, outputPath, prefix, resampleRate, resolveWAV, resolveG
 }
 
 /* Exports */
+
+exports.INTERPOLATION = INTERPOLATION;
+exports.NEAREST_NEIGHBOUR = NEAREST_NEIGHBOUR;
 
 exports.sync = sync;

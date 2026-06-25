@@ -26,8 +26,13 @@ exports.aligner = {}
 exports.aligner.initialise = aligner.initialise;
 exports.aligner.align = aligner.align;
 exports.aligner.finalise = aligner.finalise;
+exports.aligner.INTERPOLATION = aligner.INTERPOLATION;
+exports.aligner.NEAREST_NEIGHBOUR = aligner.NEAREST_NEIGHBOUR;
 
-exports.sync = syncer.sync;
+exports.syncer = {}
+exports.syncer.sync = syncer.sync;
+exports.syncer.INTERPOLATION = syncer.INTERPOLATION;
+exports.syncer.NEAREST_NEIGHBOUR = syncer.NEAREST_NEIGHBOUR;
 
 exports.getFilenameRegex = filenameHandler.getFilenameRegex;
 exports.SPLIT = filenameHandler.SPLIT;
