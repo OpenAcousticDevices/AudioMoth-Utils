@@ -62,7 +62,7 @@ audiomothUtils.aligner.initialise(inputPath);
 Then align each individual WAV file.
 
 ```javascript
-const INTERPOLATE = audiomothUtils.aligner.INTERPOLATE;
+const INTERPOLATION = audiomothUtils.aligner.INTERPOLATION;
 const NEAREST_NEIGHBOUR = audiomothUtils.aligner.NEAREST_NEIGHBOUR;
 
 audiomothUtils.aligner.align(inputPath, outputPath, prefix, INTERPOLATE, onlyProcessFilesBetweenFixes, (progress) => {
@@ -82,7 +82,7 @@ There are two resampling algorithms: linear interpolation and nearest neighbour 
 Synchronise an AudioMoth WAV file recorded using the AudioMoth-GPS-Sync firmware:
 
 ```javascript
-const INTERPOLATE = audiomothUtils.syncer.INTERPOLATE;
+const INTERPOLATION = audiomothUtils.syncer.INTERPOLATION;
 const NEAREST_NEIGHBOUR = audiomothUtils.syncer.NEAREST_NEIGHBOUR;
 
 audiomothUtils.syncer.sync(inputPath, outputPath, prefix, INTERPOLATE, resampleRate, resolveWAV, resolveGPS, (progress) => {
