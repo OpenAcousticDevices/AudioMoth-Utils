@@ -65,7 +65,7 @@ Then align each individual WAV file.
 const INTERPOLATION = audiomothUtils.aligner.INTERPOLATION;
 const NEAREST_NEIGHBOUR = audiomothUtils.aligner.NEAREST_NEIGHBOUR;
 
-audiomothUtils.aligner.align(inputPath, outputPath, prefix, INTERPOLATE, onlyProcessFilesBetweenFixes, (progress) => {
+audiomothUtils.aligner.align(inputPath, outputPath, prefix, INTERPOLATION, onlyProcessFilesBetweenFixes, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
@@ -85,7 +85,7 @@ Synchronise an AudioMoth WAV file recorded using the AudioMoth-GPS-Sync firmware
 const INTERPOLATION = audiomothUtils.syncer.INTERPOLATION;
 const NEAREST_NEIGHBOUR = audiomothUtils.syncer.NEAREST_NEIGHBOUR;
 
-audiomothUtils.syncer.sync(inputPath, outputPath, prefix, INTERPOLATE, resampleRate, resolveWAV, resolveGPS, (progress) => {
+audiomothUtils.syncer.sync(inputPath, outputPath, prefix, INTERPOLATION, resampleRate, resolveWAV, resolveGPS, (progress) => {
     console.log(progress + '% completed');
 }));
 ```
